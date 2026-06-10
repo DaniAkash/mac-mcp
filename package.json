@@ -29,16 +29,17 @@
   },
   "scripts": {
     "build": "vp pack",
+    "build:check": "rm -rf dist && bun run build > /dev/null && git diff --exit-code -- dist",
     "dev": "vp pack --watch",
     "test": "bun test",
     "test:e2e": "MAC_MCP_E2E=1 bun test tests/e2e",
-    "lint": "vp lint",
-    "fmt": "vp fmt --check",
-    "fmt:fix": "vp fmt --write",
+    "lint": "vp lint --ignore-path=.oxlintignore",
+    "fmt": "vp fmt --check --ignore-path=.oxfmtignore",
+    "fmt:fix": "vp fmt --write --ignore-path=.oxfmtignore",
     "fallow": "fallow check",
     "check": "concurrently --group --names lint,fmt,fallow --prefix-colors auto \"bun run lint\" \"bun run fmt\" \"bun run fallow\"",
     "prepublishOnly": "vp run build",
-    "prepare": "vp config && vp pack"
+    "prepare": "vp config"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

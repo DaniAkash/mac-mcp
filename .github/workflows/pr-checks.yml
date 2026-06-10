@@ -33,6 +33,13 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Lint + format + fallow
         run: bun run check
+      - name: Verify dist is up to date
+        # `dist/` ships in the repo so `bunx -y github:...` finds the bin
+        # without needing lifecycle scripts (which Bun blocks for untrusted
+        # github sources). This step rebuilds and fails if the committed
+        # dist drifts from the source. Run `bun run build` locally and
+        # commit the result alongside any src/ change.
+        run: bun run build:check
 
   test:
     name: test
