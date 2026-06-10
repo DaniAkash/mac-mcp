@@ -1,4 +1,5 @@
 import type { ZodRawShape } from "zod";
+import type { Config } from "./config/configSchema.ts";
 import type { DomainName } from "./constants.ts";
 
 export type { DomainName };
@@ -33,4 +34,4 @@ export interface DomainPlugin {
   getIndexStatus?: () => Promise<DomainIndexStatus>;
 }
 
-export type DomainLoader = () => Promise<DomainPlugin>;
+export type DomainLoader = (config: Config) => Promise<DomainPlugin>;

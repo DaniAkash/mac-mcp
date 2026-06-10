@@ -7,10 +7,14 @@ import { INDEX_STATUS_URI, readIndexStatus } from "./resources/indexStatus.ts";
 import { isWriteToolName } from "./readOnly.ts";
 
 /**
- * Static map of domain → loader. Each domain PR adds its entry; in PR 1 the
- * map is empty so an empty registry is the steady-state.
+ * Static map of domain → loader. Each domain PR adds its entry.
  */
-const DOMAIN_LOADERS: Partial<Record<DomainName, DomainLoader>> = {};
+const DOMAIN_LOADERS: Partial<Record<DomainName, DomainLoader>> = {
+  mail: async (config) => {
+    const { buildMailPlugin } = await import("../domains/mail/plugin.ts");
+    return buildMailPlugin(config);
+  },
+};
 
 export interface Registry {
   plugins: DomainPlugin[];
@@ -28,7 +32,7 @@ export async function buildRegistry(server: McpServer, config: Config): Promise<
       continue;
     }
     try {
-      const plugin = await loader();
+      const plugin = await loader(config);
       plugins.push(plugin);
     } catch (e) {
       logger.error(`failed to load domain "${domain}"`, {
@@ -122,9 +126,23 @@ export async function buildRegistry(server: McpServer, config: Config): Promise<
   return { plugins, toolNames, resourceUris };
 }
 
-/** Test helper: clear all loaders. */
+let _savedLoadersForTests: typeof DOMAIN_LOADERS | null = null;
+
+/** Test helper: clear all loaders. Pair with _restoreDomainLoadersForTests. */
 export function _resetDomainLoadersForTests(): void {
+  if (_savedLoadersForTests === null) {
+    _savedLoadersForTests = { ...DOMAIN_LOADERS };
+  }
   for (const k of Object.keys(DOMAIN_LOADERS)) {
     delete DOMAIN_LOADERS[k as DomainName];
   }
+}
+
+/** Test helper: restore the loaders saved by the most recent reset call. */
+export function _restoreDomainLoadersForTests(): void {
+  if (!_savedLoadersForTests) return;
+  for (const [k, v] of Object.entries(_savedLoadersForTests)) {
+    DOMAIN_LOADERS[k as DomainName] = v;
+  }
+  _savedLoadersForTests = null;
 }
