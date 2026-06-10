@@ -1,16 +1,22 @@
-/* global Application */
-// JXA core injected before every Mail-domain script. Defines a global
-// `MailCore` with helpers for the things mac-mcp's mail tools need:
-// - listing accounts and mailboxes
-// - resolving an account by display name (fallback to the first account)
-// - resolving a mailbox by name, with an alias map for the cross-provider
-//   naming chaos (Sent vs Sent Items vs Sent Messages vs Sent Mail, etc.)
-// - batchFetch: pulls N properties for an array of messages with one IPC
-//   round trip per property, rather than N x P round trips
-//
-// Every helper is READ-ONLY. Adding a write call here trips the JXA regex
-// sweep in tests/unit/readOnly.test.ts.
-
+/**
+ * JXA core injected before every Mail-domain script. Defines a global
+ * `MailCore` with helpers for the things mac-mcp's mail tools need:
+ * - listing accounts and mailboxes
+ * - resolving an account by display name (fallback to the first account)
+ * - resolving a mailbox by name, with an alias map for the cross-provider
+ *   naming chaos (Sent vs Sent Items vs Sent Messages vs Sent Mail, etc.)
+ * - batchFetch: pulls N properties for an array of messages with one IPC
+ *   round trip per property, rather than N x P round trips
+ *
+ * Every helper is READ-ONLY. Adding a write call here trips the JXA regex
+ * sweep in tests/unit/readOnly.test.ts.
+ *
+ * Exported as a string constant rather than a separate .js file so the
+ * bundler includes it in dist; loading via fs.readFileSync at runtime
+ * broke `bunx -y github:...` consumers because cores/*.js was not
+ * reachable from the bundle entry.
+ */
+export const MAIL_CORE = `
 const Mail = Application("Mail");
 
 const MAILBOX_ALIASES = {
@@ -100,9 +106,6 @@ globalThis.MailCore = {
   getAccount: findAccountByName,
   getMailbox: findMailboxByName,
 
-  // batchFetch(messages, props) reads N properties off an array of messages
-  // with ONE IPC round trip per property. Calling `messages[prop]()` (the
-  // collection-level accessor) returns an array of all values in one call.
   batchFetch(messages, props) {
     const result = {};
     for (const p of props) {
@@ -115,3 +118,4 @@ globalThis.MailCore = {
     return result;
   },
 };
+`;

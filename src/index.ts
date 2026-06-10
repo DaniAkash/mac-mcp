@@ -7,7 +7,8 @@
 export { ConfigError, loadConfig } from "./config/config.ts";
 export type { Config } from "./config/configSchema.ts";
 export { ALL_DOMAINS, MAC_MCP_HOME, SERVER_NAME } from "./constants.ts";
-export { JxaError, JxaTimeoutError, listCores, runJxa } from "./jxa/executor.ts";
+export { JxaError, JxaTimeoutError, runJxa } from "./jxa/executor.ts";
+export { MAIL_CORE } from "./jxa/cores/mailCore.ts";
 export { ensureWritable, ReadOnlyError } from "./server/readOnly.ts";
 export { createServer, startStdioServer } from "./server/server.ts";
 export type { DomainName, DomainPlugin, ResourceModule, ToolModule } from "./types.ts";

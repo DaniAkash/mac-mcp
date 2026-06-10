@@ -425,7 +425,7 @@ async function readIndexStatus(plugins) {
  */
 const DOMAIN_LOADERS = {
   mail: async (config) => {
-    const { buildMailPlugin } = await import("./plugin-Gzaj-yRE.mjs");
+    const { buildMailPlugin } = await import("./plugin-DCcrxbZ_.mjs");
     return buildMailPlugin(config);
   },
 };
