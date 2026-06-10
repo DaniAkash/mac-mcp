@@ -13,22 +13,15 @@
     "url": "git+https://github.com/DaniAkash/mac-mcp.git"
   },
   "bin": {
-    "mac-mcp": "./src/bin.ts"
+    "mac-mcp": "./dist/bin.mjs"
   },
   "files": [
-    "src",
     "dist"
   ],
   "type": "module",
   "exports": {
-    ".": {
-      "bun": "./src/index.ts",
-      "default": "./dist/index.mjs"
-    },
-    "./bin": {
-      "bun": "./src/bin.ts",
-      "default": "./dist/bin.mjs"
-    },
+    ".": "./dist/index.mjs",
+    "./bin": "./dist/bin.mjs",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -45,7 +38,7 @@
     "fallow": "fallow check",
     "check": "concurrently --group --names lint,fmt,fallow --prefix-colors auto \"bun run lint\" \"bun run fmt\" \"bun run fallow\"",
     "prepublishOnly": "vp run build",
-    "prepare": "vp config"
+    "prepare": "vp config && vp pack"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
