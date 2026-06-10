@@ -1,33 +1,8 @@
-import { b as DEFAULT_SQLITE_BUSY_TIMEOUT_MS, d as safeStringify } from "./server-DxrEjUHN.mjs";
+import { b as DEFAULT_SQLITE_BUSY_TIMEOUT_MS, d as safeStringify } from "./server-7_N-3K5h.mjs";
+import { n as withTimeout, t as TimeoutError } from "./timeout-gKsSSNAL.mjs";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
-//#region src/utils/timeout.ts
-var TimeoutError = class extends Error {
-  constructor(ms, label) {
-    super(label ? `${label} timed out after ${ms}ms` : `timed out after ${ms}ms`);
-    this.name = "TimeoutError";
-  }
-};
-/**
- * Race a promise against a timeout. Throws `TimeoutError` if the timeout fires first.
- */
-function withTimeout(promise, ms, label) {
-  return new Promise((resolveFn, rejectFn) => {
-    const timer = setTimeout(() => rejectFn(new TimeoutError(ms, label)), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolveFn(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        rejectFn(e);
-      },
-    );
-  });
-}
-//#endregion
 //#region src/jxa/executor.ts
 var JxaError = class extends Error {
   preview;
@@ -247,9 +222,7 @@ function applyPragmas(db, pragmas) {
 //#endregion
 export {
   JxaError as a,
-  TimeoutError as c,
   MAIL_CORE as i,
-  withTimeout as l,
   createConnection as n,
   JxaTimeoutError as o,
   createReadOnlyConnection as r,

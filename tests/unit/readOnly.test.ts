@@ -15,6 +15,8 @@ const SANDBOXED_DIRS = ["src/server/tools", "src/domains"];
 
 const ALLOWED_BINARIES = new Set([
   "osascript",
+  // Spotlight's command-line interface; pure read against the system index.
+  "mdfind",
   // Placeholder for the Swift helper bundled in a future PR.
   "./helpers/eventkit/dist/eventkit-helper",
 ]);
