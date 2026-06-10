@@ -14,6 +14,10 @@ const DOMAIN_LOADERS: Partial<Record<DomainName, DomainLoader>> = {
     const { buildMailPlugin } = await import("../domains/mail/plugin.ts");
     return buildMailPlugin(config);
   },
+  spotlight: async () => {
+    const { buildSpotlightPlugin } = await import("../domains/spotlight/plugin.ts");
+    return buildSpotlightPlugin();
+  },
 };
 
 export interface Registry {

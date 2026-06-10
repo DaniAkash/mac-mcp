@@ -9,13 +9,13 @@ Bootstrapped with [Vite+](https://viteplus.dev/) and Bun. Status: Mail domain sh
 | Domain               | State          |
 | -------------------- | -------------- |
 | Mail                 | shipped (v0.1) |
+| Spotlight            | shipped        |
 | Notes                | planned        |
 | Calendar / Reminders | planned        |
 | Contacts             | planned        |
 | Messages             | planned        |
-| Spotlight            | planned        |
 
-The server is read-only by construction. There is no CLI flag, env var, or config key that enables writes. A regression test sweeps every JXA template for write-capable Apple Events phrases (`set readStatus`, `move to`, `delete`, `send`, etc.) and another sweeps every tool / domain module to ensure they only spawn `osascript`.
+The server is read-only by construction. There is no CLI flag, env var, or config key that enables writes. A regression test sweeps every JXA template for write-capable Apple Events phrases (`set readStatus`, `move to`, `delete`, `send`, etc.) and another sweeps every tool / domain module to ensure they only spawn read-only system commands (`osascript`, `mdfind`).
 
 ## Requirements
 
@@ -59,6 +59,19 @@ The Mail domain maintains a SQLite + FTS5 index at `~/.mac-mcp/mail.db`:
 - Disk-first state-reconciliation sync (NEW / DELETED / MOVED diffs in pure SQL).
 - Background sync every 5 minutes by default (configurable).
 - Dead-letter queue surfaces parse failures via `index://status`.
+
+## Spotlight tool
+
+One read-only tool: `spotlight_search`.
+
+| Input   | Type                              | Default  | Notes                                                                                     |
+| ------- | --------------------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `query` | string                            | required | Plain text or full mdfind metadata query syntax (`kMDItemContentType == "public.image"`). |
+| `path`  | string                            | none     | Restrict to this directory tree. Must resolve under `$HOME`.                              |
+| `kind`  | `"file"` \| `"folder"` \| `"any"` | `"any"`  | Post-filter on filesystem entry kind.                                                     |
+| `limit` | number                            | 25       | Hard cap 100.                                                                             |
+
+The macOS Spotlight index (`mds`) is already maintained by the OS; we never build our own. Subprocess runs `mdfind` with a 5-second per-call timeout; truncated indicates more matches existed beyond the limit.
 
 ## MCP client config
 
