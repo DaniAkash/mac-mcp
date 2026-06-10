@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": ["src/index.ts", "src/bin.ts"],
+  "ignorePatterns": ["**/*.d.ts", "**/dist/**", "**/node_modules/**", "**/.fallow/**"],
+  "ignoreDependencies": ["bumpp", "@typescript/native-preview", "typescript", "concurrently"],
+  "rules": {
+    "private-type-leaks": "warn",
+    "unused-class-members": "off",
+    "duplicate-exports": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.spec.ts", "**/test/**"],
+      "rules": { "unused-exports": "off", "unused-files": "off" }
+    },
+    {
+      "files": ["src/index.ts"],
+      "rules": { "unused-exports": "off" }
+    }
+  ],
+  "health": {
+    "maxCyclomatic": 20,
+    "maxCognitive": 15,
+    "ignore": ["**/dist/**", "**/*.test.ts"]
+  }
+}
