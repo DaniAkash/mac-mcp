@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
@@ -35,13 +35,29 @@ export function detectMailDir(): MailDir | null {
 }
 
 /**
- * Reject paths that escape the expected root. The check is applied to the
- * resolved (symlink-followed) form of both sides so a malicious symlink
- * cannot let a watcher pull an attacker-controlled path through.
+ * Best-effort symlink-aware resolve. When the path exists, this calls
+ * realpathSync so symlinks are followed. When the path does not exist (e.g.
+ * test fixtures, or callers checking a path before creating it), it falls
+ * back to plain `resolve()` which still handles `..` traversal normalisation.
+ */
+function safeRealpath(path: string): string {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+/**
+ * Reject paths that escape the expected root. Both sides are passed through
+ * realpathSync when they exist so a symlink that points outside the root
+ * cannot smuggle an attacker-controlled path through. For non-existent
+ * paths (test fixtures, paths about to be created) we fall back to
+ * `resolve()` which still normalises `..` traversal.
  */
 export function isWithin(candidate: string, root: string): boolean {
-  const r1 = resolve(candidate);
-  const r2 = resolve(root);
+  const r1 = safeRealpath(candidate);
+  const r2 = safeRealpath(root);
   if (r1 === r2) return true;
   return r1.startsWith(`${r2}/`);
 }

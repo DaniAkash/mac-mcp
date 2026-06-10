@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
+import { accessSync, constants as fsConstants, existsSync } from "node:fs";
 import { glob } from "node:fs/promises";
 import { homedir } from "node:os";
 import { detectMailDir } from "./paths.ts";
@@ -68,11 +68,18 @@ export function checkMacOsVersion(): PermCheck {
 
 export function checkHomeDirWritable(): PermCheck {
   const home = homedir();
-  return existsSync(home)
-    ? { name: "Home directory accessible", passed: true }
-    : {
-        name: "Home directory accessible",
-        passed: false,
-        detail: `${home} not found`,
-      };
+  if (!existsSync(home)) {
+    return { name: "Home directory writable", passed: false, detail: `${home} not found` };
+  }
+  try {
+    accessSync(home, fsConstants.W_OK);
+    return { name: "Home directory writable", passed: true };
+  } catch {
+    return {
+      name: "Home directory writable",
+      passed: false,
+      detail: `${home} exists but is not writable`,
+      fix: "Check filesystem permissions on the home directory.",
+    };
+  }
 }

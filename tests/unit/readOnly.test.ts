@@ -1,8 +1,9 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 
-const REPO_ROOT = new URL("../..", import.meta.url).pathname;
+const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 /**
  * Directories whose source files are forbidden from spawning anything other
@@ -40,11 +41,7 @@ const FORBIDDEN_JXA_PHRASES = [
   "saveTo",
 ];
 
-interface SpawnHit {
-  file: string;
-  line: number;
-  snippet: string;
-}
+type Hit = { kind: "spawn" | "child_process"; file: string; line: number; snippet: string };
 
 function walkTs(dir: string): string[] {
   if (!existsSync(dir)) return [];
@@ -61,19 +58,27 @@ function walkTs(dir: string): string[] {
   return out;
 }
 
-function findSpawnCalls(text: string): { line: number; snippet: string }[] {
-  const hits: { line: number; snippet: string }[] = [];
+function findSubprocessHits(file: string, text: string): Hit[] {
+  const hits: Hit[] = [];
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
-    if (/\bBun\.spawn(Sync)?\b/.test(line) || /child_process/.test(line)) {
-      hits.push({ line: i + 1, snippet: line.trim() });
+    if (/\bBun\.spawn(Sync)?\b/.test(line)) {
+      hits.push({ kind: "spawn", file, line: i + 1, snippet: line.trim() });
+      continue;
+    }
+    // Any reference to child_process inside the sandboxed dirs is banned
+    // regardless of how it is used. There is no legitimate reason for a tool
+    // or domain to reach for Node's child_process API; everything goes
+    // through osascript via Bun.spawn.
+    if (/\bchild_process\b/.test(line)) {
+      hits.push({ kind: "child_process", file, line: i + 1, snippet: line.trim() });
     }
   }
   return hits;
 }
 
-function extractFirstArg(snippet: string): string | null {
+function extractSpawnBinary(snippet: string): string | null {
   // Match Bun.spawn(["foo", ...]) or Bun.spawn("foo", ...)
   const arr = snippet.match(/Bun\.spawn(?:Sync)?\s*\(\s*\[\s*["']([^"']+)["']/);
   if (arr?.[1]) return arr[1];
@@ -82,21 +87,25 @@ function extractFirstArg(snippet: string): string | null {
   return null;
 }
 
-test("AST sweep: tools and domains spawn only approved binaries", () => {
-  const hits: SpawnHit[] = [];
+test("subprocess sweep: tools and domains spawn only approved binaries", () => {
+  const hits: Hit[] = [];
   for (const dir of SANDBOXED_DIRS) {
     const abs = join(REPO_ROOT, dir);
     for (const file of walkTs(abs)) {
-      const text = readFileSync(file, "utf8");
-      for (const hit of findSpawnCalls(text)) {
-        hits.push({ file, ...hit });
-      }
+      hits.push(...findSubprocessHits(file, readFileSync(file, "utf8")));
     }
   }
   for (const hit of hits) {
-    const bin = extractFirstArg(hit.snippet);
+    if (hit.kind === "child_process") {
+      throw new Error(
+        `${hit.file}:${hit.line} references child_process; tools and domains must use osascript via Bun.spawn instead.\n  ${hit.snippet}`,
+      );
+    }
+    const bin = extractSpawnBinary(hit.snippet);
     if (bin === null) {
-      throw new Error(`${hit.file}:${hit.line}. spawn call shape not recognised: ${hit.snippet}`);
+      throw new Error(
+        `${hit.file}:${hit.line} subprocess spawn shape not recognised; the sweep needs to be taught about it: ${hit.snippet}`,
+      );
     }
     expect(
       ALLOWED_BINARIES.has(bin),

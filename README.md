@@ -31,7 +31,7 @@ mac-mcp init             # write ~/.mac-mcp/config.toml template
 mac-mcp doctor           # probe macOS permissions, print a checklist
 mac-mcp status           # print per-domain index health as JSON
 mac-mcp index            # (no-op until the first domain lands)
-mac-mcp rebuild --domain # (no-op until the first domain lands)
+mac-mcp rebuild --domain <name>   # (no-op until the first domain lands)
 ```
 
 ## Development
