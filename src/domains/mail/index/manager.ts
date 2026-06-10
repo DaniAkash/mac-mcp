@@ -112,7 +112,11 @@ class MailIndexManager {
     const failedJobsCount = countFailures(this.db);
     let stalenessHours: number | null = null;
     if (syncRow?.last_sync) {
-      const last = Date.parse(`${syncRow.last_sync}Z`);
+      // SQLite's datetime('now') emits "YYYY-MM-DD HH:MM:SS" (space, not T).
+      // Convert to strict ISO 8601 before Date.parse so behaviour does not
+      // depend on engine-specific tolerance.
+      const iso = `${syncRow.last_sync.replace(" ", "T")}Z`;
+      const last = Date.parse(iso);
       if (Number.isFinite(last)) {
         stalenessHours = (Date.now() - last) / 3_600_000;
       }

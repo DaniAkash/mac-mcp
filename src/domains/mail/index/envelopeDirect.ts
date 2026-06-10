@@ -58,6 +58,16 @@ export function parseMailboxUrl(url: string): ParsedMailboxUrl | null {
   };
 }
 
+/**
+ * Re-encode a decoded mailbox name for use in `mailboxes.url`-style LIKE
+ * predicates. Each `/`-separated segment is `encodeURIComponent`-encoded,
+ * then rejoined with literal `/` so paths like `[Gmail]/All Mail` produce
+ * the same `%5BGmail%5D/All%20Mail` shape Apple stores.
+ */
+export function encodeMailboxPath(name: string): string {
+  return name.split("/").map(encodeURIComponent).join("/");
+}
+
 export interface ListMailboxesRow {
   rowid: number;
   account: string;
@@ -130,7 +140,7 @@ export function queryEmails(handle: EnvelopeIndexHandle, opts: GetEmailsOpts): E
   }
   if (opts.mailbox) {
     where.push("mb.url LIKE ?");
-    params.push(`%/${encodeURIComponent(opts.mailbox)}`);
+    params.push(`%/${encodeMailboxPath(opts.mailbox)}`);
   }
   switch (opts.filter) {
     case "unread":

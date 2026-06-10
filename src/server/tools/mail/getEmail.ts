@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { displayNameForUuid, resolveAccountUuid } from "../../../domains/mail/index/accountMap.ts";
+import { labelForCategoryInt } from "../../../domains/mail/index/categories.ts";
 import {
-  CATEGORY_INT_BY_LABEL,
-  labelForCategoryInt,
-} from "../../../domains/mail/index/categories.ts";
-import { openEnvelopeIndex, parseMailboxUrl } from "../../../domains/mail/index/envelopeDirect.ts";
+  encodeMailboxPath,
+  openEnvelopeIndex,
+  parseMailboxUrl,
+} from "../../../domains/mail/index/envelopeDirect.ts";
 import { parseEmlx } from "../../../domains/mail/index/emlxParser.ts";
 import { getMailIndex } from "../../../domains/mail/index/manager.ts";
 import type { EmailFull, MailCategory } from "../../../domains/mail/mail.types.ts";
@@ -58,7 +59,7 @@ export const TOOL: ToolModule = {
       }
       if (args.mailbox) {
         where.push("mb.url LIKE ?");
-        params.push(`%/${encodeURIComponent(args.mailbox)}`);
+        params.push(`%/${encodeMailboxPath(args.mailbox)}`);
       }
       const categorySupported = handle.categorySupport.kind === "supported";
       const categoryJoin = categorySupported
@@ -102,15 +103,27 @@ export const TOOL: ToolModule = {
       // Look up the on-disk .emlx path from our local FTS5 index when it is
       // initialised. Without the local index we fall straight through to the
       // envelope-only response (no body, no recipients) which is still useful.
+      //
+      // The local index keys emails by (account UUID, mailbox name, Mail.app
+      // per-mailbox integer id) since Mail.app message ids are only unique
+      // within a mailbox. args.messageId IS that per-mailbox integer (it
+      // equals messages.ROWID in the Envelope Index, which equals the .emlx
+      // filename), NOT the 63-bit `messages.message_id` hash.
       let emlxPath: string | null = null;
-      try {
-        const localDb = getMailIndex().getDb();
-        const fromIndex = localDb
-          .query("SELECT emlx_path FROM emails WHERE message_id = ? LIMIT 1")
-          .get(row.message_id) as { emlx_path: string | null } | null;
-        emlxPath = fromIndex?.emlx_path ?? null;
-      } catch {
-        // Mail plugin not initialised in this process. Skip the disk path.
+      if (mailboxParsed) {
+        try {
+          const localDb = getMailIndex().getDb();
+          const fromIndex = localDb
+            .query(
+              "SELECT emlx_path FROM emails WHERE message_id = ? AND account = ? AND mailbox = ? LIMIT 1",
+            )
+            .get(args.messageId, mailboxParsed.uuid, mailboxParsed.mailbox) as {
+            emlx_path: string | null;
+          } | null;
+          emlxPath = fromIndex?.emlx_path ?? null;
+        } catch {
+          // Mail plugin not initialised in this process. Skip the disk path.
+        }
       }
       if (emlxPath) {
         try {
@@ -142,7 +155,6 @@ export const TOOL: ToolModule = {
       }
 
       // No on-disk path available; return what we can from the envelope.
-      void CATEGORY_INT_BY_LABEL.primary; // keep the import referenced
       const category: MailCategory | null = labelForCategoryInt(row.category_int);
       const result: EmailFull = {
         id: args.messageId,

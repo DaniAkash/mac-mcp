@@ -169,7 +169,14 @@ export async function fullSync(db: Database, opts: SyncOpts = {}): Promise<SyncS
     }
   }
 
-  db.run("UPDATE sync_state SET last_sync = datetime('now')");
+  // Track the global last-sync timestamp via a sentinel row. v0.1 does not
+  // track per-(account, mailbox) state, so we keep it simple and write one
+  // composite key. The manager's getStatus reads this via MAX(last_sync).
+  db.run(
+    `INSERT INTO sync_state (account, mailbox, last_sync, message_count)
+       VALUES ('__global', '__global', datetime('now'), 0)
+       ON CONFLICT(account, mailbox) DO UPDATE SET last_sync = excluded.last_sync`,
+  );
 
   const stats: SyncStats = {
     scanned,

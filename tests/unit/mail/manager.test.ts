@@ -34,3 +34,24 @@ test("getMailIndex throws when called before init", () => {
   _resetMailIndexForTests();
   expect(() => getMailIndex()).toThrow();
 });
+
+test("getStatus reports lastSync + stalenessHours once a sync row exists", () => {
+  const mgr = getMailIndex({
+    indexDir: tmp,
+    maxEmailsPerMailbox: 0,
+    excludeMailboxes: [],
+    syncIntervalSeconds: 300,
+  });
+  // Manually write the sentinel row using the same UPSERT shape sync.ts uses.
+  mgr.getDb().run(
+    `INSERT INTO sync_state (account, mailbox, last_sync, message_count)
+       VALUES ('__global', '__global', datetime('now'), 0)
+       ON CONFLICT(account, mailbox) DO UPDATE SET last_sync = excluded.last_sync`,
+  );
+  const status = mgr.getStatus();
+  expect(status.lastSync).not.toBe(null);
+  expect(status.lastSync).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  // Just-now sync, so staleness is tiny but non-null.
+  expect(status.stalenessHours).not.toBe(null);
+  expect(status.stalenessHours).toBeLessThan(1);
+});

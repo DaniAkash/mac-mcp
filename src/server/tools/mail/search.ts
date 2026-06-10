@@ -44,13 +44,15 @@ export const TOOL: ToolModule = {
     if (args.account && accountUuid === undefined) {
       return { results: [], hint: `No account matched display name "${args.account}".` };
     }
-    const accountDisplay = accountUuid ? await displayNameForUuid(accountUuid) : undefined;
     const effectiveCategory = args.category && args.category !== "all" ? args.category : undefined;
 
-    const results = searchEmails(index.getDb(), {
+    // The local index stores `emails.account` as the Apple UUID (set by the
+    // sync pipeline from the on-disk path). Filter by UUID, then translate
+    // back to display name in the response for parity with the other tools.
+    const rawResults = searchEmails(index.getDb(), {
       query: args.query,
       scope: args.scope,
-      account: accountDisplay,
+      account: accountUuid ?? undefined,
       mailbox: args.mailbox,
       category: effectiveCategory,
       before: args.before,
@@ -59,6 +61,9 @@ export const TOOL: ToolModule = {
       limit: args.limit,
       offset: args.offset,
     });
+    const results = await Promise.all(
+      rawResults.map(async (r) => ({ ...r, account: await displayNameForUuid(r.account) })),
+    );
     return {
       ordering: "bm25_then_date_received_desc",
       results,

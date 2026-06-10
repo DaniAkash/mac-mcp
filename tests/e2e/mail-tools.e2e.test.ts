@@ -12,13 +12,19 @@
  *
  *   MAC_MCP_E2E=1 bun test tests/e2e
  */
+import { glob } from "node:fs/promises";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { _clearAccountMapForTests } from "../../src/domains/mail/index/accountMap.ts";
 import { openEnvelopeIndex } from "../../src/domains/mail/index/envelopeDirect.ts";
+import { _resetMailIndexForTests, getMailIndex } from "../../src/domains/mail/index/manager.ts";
 import { TOOL as getEmailTool } from "../../src/server/tools/mail/getEmail.ts";
 import { TOOL as getEmailsTool } from "../../src/server/tools/mail/getEmails.ts";
 import { TOOL as listAccountsTool } from "../../src/server/tools/mail/listAccounts.ts";
 import { TOOL as listMailboxesTool } from "../../src/server/tools/mail/listMailboxes.ts";
+import { detectMailDir } from "../../src/utils/paths.ts";
 
 const E2E = process.env.MAC_MCP_E2E === "1";
 
@@ -176,5 +182,82 @@ describe.skipIf(!E2E)("mail e2e: direct handler calls against live Mail data", (
     };
     expect(result.error).toBeDefined();
     expect(result.error).toMatch(/No message with id/);
+  });
+
+  test("mail_get_email: with a populated local index, returns body + recipients from disk", async () => {
+    // Pick the most recent email and find its .emlx on disk so we can seed
+    // the local index. This proves the full disk-path branch of
+    // mail_get_email - the one that always silently no-op'd before the
+    // (account, mailbox, message_id) lookup fix.
+    const list = (await getEmailsTool.handler({ limit: 1 })) as EmailsFlat & {
+      emails: (EmailsFlat["emails"][number] & { mailbox?: string })[];
+    };
+    const first = list.emails[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+
+    const { accounts } = (await listAccountsTool.handler({})) as AccountsResult;
+    const accountUuid = accounts.find(
+      (a) => a.name === (first as { account?: string }).account,
+    )?.id;
+    expect(accountUuid).toBeDefined();
+    const mailbox = (first as { mailbox?: string }).mailbox;
+    expect(mailbox).toBeTruthy();
+
+    const mailDir = detectMailDir();
+    expect(mailDir).not.toBeNull();
+    if (!mailDir || !accountUuid || !mailbox) return;
+
+    // Translate "[Gmail]/All Mail" -> "[Gmail].mbox/All Mail.mbox" to walk the
+    // on-disk path. .emlx files live under variable sharded subdirectories,
+    // so glob for the id anywhere beneath the mailbox root.
+    const mailboxPath = mailbox
+      .split("/")
+      .map((s) => `${s}.mbox`)
+      .join("/");
+    const searchRoot = `${mailDir.path}/${accountUuid}/${mailboxPath}`;
+    const candidates = await Array.fromAsync(glob(`${searchRoot}/**/${first.id}.emlx`));
+    const emlxPath = candidates[0];
+    if (!emlxPath) {
+      // Not every envelope row is materialised on disk (e.g. server-side
+      // copies of [Gmail]/All Mail). Skip gracefully if we cannot find the
+      // disk-backed payload - the unit test in tests/unit/mail/getEmail.test.ts
+      // already covers the SQL lookup shape.
+      return;
+    }
+
+    // Spin up an isolated local index pointing at a tmp dir, seed it with
+    // the single row, then call the tool.
+    const tmp = mkdtempSync(join(tmpdir(), "mac-mcp-e2e-getemail-"));
+    try {
+      _resetMailIndexForTests();
+      const mgr = getMailIndex({
+        indexDir: tmp,
+        maxEmailsPerMailbox: 0,
+        excludeMailboxes: [],
+        syncIntervalSeconds: 86400,
+      });
+      mgr.getDb().run(
+        `INSERT INTO emails (message_id, account, mailbox, subject, sender, content, date_received, date_sent, emlx_path, category, is_unread, is_flagged, attachment_count)
+         VALUES (?, ?, ?, '', '', '', '', '', ?, NULL, 1, 0, 0)`,
+        [first.id, accountUuid, mailbox, emlxPath],
+      );
+
+      const result = (await getEmailTool.handler({
+        messageId: first.id,
+        account: (first as { account?: string }).account,
+        mailbox,
+      })) as { body: string; recipients: { to: string[]; cc: string[]; bcc: string[] } };
+
+      expect(typeof result.body).toBe("string");
+      expect(result.body.length).toBeGreaterThan(0);
+      // At least one recipient channel should be populated for a real message.
+      const recipientCount =
+        result.recipients.to.length + result.recipients.cc.length + result.recipients.bcc.length;
+      expect(recipientCount).toBeGreaterThan(0);
+    } finally {
+      _resetMailIndexForTests();
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });
