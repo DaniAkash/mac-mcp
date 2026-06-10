@@ -7,7 +7,7 @@ import {
   m as detectMailDir,
   n as startStdioServer,
   r as readIndexStatus,
-} from "./server-BTVN4ZGR.mjs";
+} from "./server-DxrEjUHN.mjs";
 import { accessSync, chmodSync, constants, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname } from "node:path";

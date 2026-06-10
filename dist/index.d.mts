@@ -65,7 +65,12 @@ declare class JxaTimeoutError extends JxaError {
 interface RunOpts {
   /** Per-call timeout in ms. Default 120s. */
   timeoutMs?: number;
-  /** Names of per-domain cores to inject (e.g. ["mail"] loads cores/mailCore.js). */
+  /**
+   * Raw JXA helper scripts (e.g. the MAIL_CORE constant) prepended to
+   * `script` before invocation. Passed by content, not by name, so the
+   * bundler always includes them. Callers import the core constants
+   * from `src/jxa/cores/` directly.
+   */
   cores?: string[];
 }
 /**
@@ -74,11 +79,28 @@ interface RunOpts {
  * surface a truncated preview to help debugging without leaking secrets.
  */
 declare function runJxa<T = unknown>(script: string, opts?: RunOpts): Promise<T>;
+//#endregion
+//#region src/jxa/cores/mailCore.d.ts
 /**
- * List the names of cores currently bundled. Used by tests and diagnostics
- * to enumerate which JXA helpers are available.
+ * JXA core injected before every Mail-domain script. Defines a global
+ * `MailCore` with helpers for the things mac-mcp's mail tools need:
+ * - listing accounts and mailboxes
+ * - resolving an account by display name (fallback to the first account)
+ * - resolving a mailbox by name, with an alias map for the cross-provider
+ *   naming chaos (Sent vs Sent Items vs Sent Messages vs Sent Mail, etc.)
+ * - batchFetch: pulls N properties for an array of messages with one IPC
+ *   round trip per property, rather than N x P round trips
+ *
+ * Every helper is READ-ONLY. Adding a write call here trips the JXA regex
+ * sweep in tests/unit/readOnly.test.ts.
+ *
+ * Exported as a string constant rather than a separate .js file so the
+ * bundler includes it in dist; loading via fs.readFileSync at runtime
+ * broke `bunx -y github:...` consumers because cores/*.js was not
+ * reachable from the bundle entry.
  */
-declare function listCores(): string[];
+declare const MAIL_CORE =
+  '\nconst Mail = Application("Mail");\n\nconst MAILBOX_ALIASES = {\n  Inbox: ["INBOX", "Inbox"],\n  Sent: ["Sent", "Sent Items", "Sent Messages", "Sent Mail"],\n  Drafts: ["Drafts", "Draft"],\n  Trash: ["Trash", "Deleted Items", "Deleted Messages", "Bin"],\n  Junk: ["Junk", "Junk Email", "Spam", "Bulk Mail"],\n  Archive: ["Archive", "All Mail", "[Gmail]/All Mail"],\n};\n\nfunction findAccountByName(name) {\n  const accounts = Mail.accounts();\n  if (!name) return accounts[0];\n  for (const a of accounts) {\n    try {\n      if (a.name() === name) return a;\n    } catch {}\n  }\n  const lower = name.toLowerCase();\n  for (const a of accounts) {\n    try {\n      if (a.name().toLowerCase() === lower) return a;\n    } catch {}\n  }\n  return null;\n}\n\nfunction findMailboxByName(account, name) {\n  if (!account) return null;\n  if (!name) return null;\n  const boxes = account.mailboxes();\n  for (const m of boxes) {\n    try {\n      if (m.name() === name) return m;\n    } catch {}\n  }\n  let candidates = [name];\n  for (const canonical of Object.keys(MAILBOX_ALIASES)) {\n    const group = MAILBOX_ALIASES[canonical];\n    if (group.indexOf(name) !== -1 || canonical === name) {\n      candidates = group;\n      break;\n    }\n  }\n  for (const c of candidates) {\n    for (const m of boxes) {\n      try {\n        if (m.name() === c) return m;\n      } catch {}\n    }\n  }\n  const lower = name.toLowerCase();\n  for (const m of boxes) {\n    try {\n      if (m.name().toLowerCase() === lower) return m;\n    } catch {}\n  }\n  return null;\n}\n\nglobalThis.MailCore = {\n  listAccounts() {\n    const result = [];\n    const accounts = Mail.accounts();\n    for (const a of accounts) {\n      try {\n        result.push({ name: a.name(), id: a.id() });\n      } catch {}\n    }\n    return result;\n  },\n\n  listMailboxes(accountName) {\n    const account = findAccountByName(accountName);\n    if (!account) return [];\n    const result = [];\n    const boxes = account.mailboxes();\n    for (const m of boxes) {\n      try {\n        result.push({ name: m.name(), unreadCount: m.unreadCount() });\n      } catch {}\n    }\n    return result;\n  },\n\n  getAccount: findAccountByName,\n  getMailbox: findMailboxByName,\n\n  batchFetch(messages, props) {\n    const result = {};\n    for (const p of props) {\n      try {\n        result[p] = messages[p]();\n      } catch {\n        result[p] = [];\n      }\n    }\n    return result;\n  },\n};\n';
 //#endregion
 //#region src/server/readOnly.d.ts
 /**
@@ -201,6 +223,7 @@ export {
   JxaError,
   JxaTimeoutError,
   MAC_MCP_HOME,
+  MAIL_CORE,
   ReadOnlyError,
   type ResourceModule,
   SERVER_NAME,
@@ -213,7 +236,6 @@ export {
   getLogLevel,
   isLogLevel,
   isWithin,
-  listCores,
   loadConfig,
   parseLogLevel,
   runJxa,

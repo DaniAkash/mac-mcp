@@ -13,18 +13,18 @@ import {
   t as createServer,
   u as ensureWritable,
   x as MAC_MCP_HOME,
-} from "./server-BTVN4ZGR.mjs";
+} from "./server-DxrEjUHN.mjs";
 import {
-  a as JxaTimeoutError,
+  a as JxaError,
   c as TimeoutError,
-  i as JxaError,
+  i as MAIL_CORE,
   l as withTimeout,
   n as createConnection,
-  o as listCores,
+  o as JxaTimeoutError,
   r as createReadOnlyConnection,
   s as runJxa,
   t as DEFAULT_PRAGMAS,
-} from "./sqlite-DB-gHLXl.mjs";
+} from "./sqlite-CyOF3pnd.mjs";
 export {
   ALL_DOMAINS,
   ConfigError,
@@ -32,6 +32,7 @@ export {
   JxaError,
   JxaTimeoutError,
   MAC_MCP_HOME,
+  MAIL_CORE,
   ReadOnlyError,
   SERVER_NAME,
   TimeoutError,
@@ -42,7 +43,6 @@ export {
   getLogLevel,
   isLogLevel,
   isWithin,
-  listCores,
   loadConfig,
   parseLogLevel,
   runJxa,

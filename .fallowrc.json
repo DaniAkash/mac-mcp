@@ -1,13 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "entry": ["src/index.ts", "src/bin.ts"],
-  "ignorePatterns": [
-    "**/*.d.ts",
-    "**/dist/**",
-    "**/node_modules/**",
-    "**/.fallow/**",
-    "src/jxa/cores/**/*.js"
-  ],
+  "ignorePatterns": ["**/*.d.ts", "**/dist/**", "**/node_modules/**", "**/.fallow/**"],
   "ignoreDependencies": ["bumpp", "@typescript/native-preview", "typescript", "concurrently"],
   "rules": {
     "private-type-leaks": "warn",

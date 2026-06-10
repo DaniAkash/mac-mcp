@@ -3,12 +3,13 @@ import {
   m as detectMailDir,
   o as logger,
   v as DEFAULT_INDEX_DIR,
-} from "./server-BTVN4ZGR.mjs";
+} from "./server-DxrEjUHN.mjs";
 import {
+  i as MAIL_CORE,
   n as createConnection,
   r as createReadOnlyConnection,
   s as runJxa,
-} from "./sqlite-DB-gHLXl.mjs";
+} from "./sqlite-CyOF3pnd.mjs";
 import { basename, join, sep } from "node:path";
 import { readdir, stat } from "node:fs/promises";
 import { z } from "zod";
@@ -41,7 +42,7 @@ async function getAccounts(opts = {}) {
   if (inflight) return inflight;
   inflight = (async () => {
     try {
-      const normalised = ((await runJxa(buildListAccountsScript(), { cores: ["mail"] })) ?? [])
+      const normalised = ((await runJxa(buildListAccountsScript(), { cores: [MAIL_CORE] })) ?? [])
         .filter((a) => Boolean(a) && typeof a.id === "string" && typeof a.name === "string")
         .map((a) => ({
           name: a.name,

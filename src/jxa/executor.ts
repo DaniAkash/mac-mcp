@@ -1,11 +1,6 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { DEFAULT_JXA_TIMEOUT_MS } from "../constants.ts";
 import { safeStringify } from "../utils/json.ts";
 import { TimeoutError, withTimeout } from "../utils/timeout.ts";
-
-const CORES_DIR = join(fileURLToPath(new URL(".", import.meta.url)), "cores");
 
 export class JxaError extends Error {
   constructor(
@@ -27,7 +22,12 @@ export class JxaTimeoutError extends JxaError {
 export interface RunOpts {
   /** Per-call timeout in ms. Default 120s. */
   timeoutMs?: number;
-  /** Names of per-domain cores to inject (e.g. ["mail"] loads cores/mailCore.js). */
+  /**
+   * Raw JXA helper scripts (e.g. the MAIL_CORE constant) prepended to
+   * `script` before invocation. Passed by content, not by name, so the
+   * bundler always includes them. Callers import the core constants
+   * from `src/jxa/cores/` directly.
+   */
   cores?: string[];
 }
 
@@ -38,7 +38,7 @@ export interface RunOpts {
  */
 export async function runJxa<T = unknown>(script: string, opts: RunOpts = {}): Promise<T> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_JXA_TIMEOUT_MS;
-  const cores = (opts.cores ?? []).map(loadCore).join("\n\n");
+  const cores = (opts.cores ?? []).join("\n\n");
   const full = cores ? `${cores}\n\n${script}` : script;
 
   const proc = Bun.spawn(["osascript", "-l", "JavaScript", "-e", full], {
@@ -68,35 +68,5 @@ export async function runJxa<T = unknown>(script: string, opts: RunOpts = {}): P
       `failed to parse osascript output as JSON: ${(e as Error).message}`,
       safeStringify(stdout, 500),
     );
-  }
-}
-
-const coreCache = new Map<string, string>();
-
-function loadCore(name: string): string {
-  const cached = coreCache.get(name);
-  if (cached !== undefined) return cached;
-  const path = join(CORES_DIR, `${name}Core.js`);
-  let body: string;
-  try {
-    body = readFileSync(path, "utf8");
-  } catch (e) {
-    throw new JxaError(`cannot load JXA core "${name}" at ${path}: ${(e as Error).message}`);
-  }
-  coreCache.set(name, body);
-  return body;
-}
-
-/**
- * List the names of cores currently bundled. Used by tests and diagnostics
- * to enumerate which JXA helpers are available.
- */
-export function listCores(): string[] {
-  try {
-    return readdirSync(CORES_DIR)
-      .filter((f) => f.endsWith("Core.js"))
-      .map((f) => f.replace(/Core\.js$/, ""));
-  } catch {
-    return [];
   }
 }

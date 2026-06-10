@@ -1,5 +1,6 @@
-import { runJxa } from "../../../jxa/executor.ts";
 import { buildListAccountsScript } from "../../../jxa/builders/mail.ts";
+import { MAIL_CORE } from "../../../jxa/cores/mailCore.ts";
+import { runJxa } from "../../../jxa/executor.ts";
 import type { MailAccount } from "../mail.types.ts";
 
 const TTL_MS = 5 * 60 * 1000;
@@ -26,7 +27,7 @@ export async function getAccounts(opts: { force?: boolean } = {}): Promise<MailA
   inflight = (async () => {
     try {
       const raw =
-        (await runJxa<MailAccount[]>(buildListAccountsScript(), { cores: ["mail"] })) ?? [];
+        (await runJxa<MailAccount[]>(buildListAccountsScript(), { cores: [MAIL_CORE] })) ?? [];
       const normalised = raw
         .filter(
           (a): a is MailAccount =>
