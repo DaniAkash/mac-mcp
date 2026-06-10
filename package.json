@@ -13,15 +13,22 @@
     "url": "git+https://github.com/DaniAkash/mac-mcp.git"
   },
   "bin": {
-    "mac-mcp": "./dist/bin.mjs"
+    "mac-mcp": "./src/bin.ts"
   },
   "files": [
+    "src",
     "dist"
   ],
   "type": "module",
   "exports": {
-    ".": "./dist/index.mjs",
-    "./bin": "./dist/bin.mjs",
+    ".": {
+      "bun": "./src/index.ts",
+      "default": "./dist/index.mjs"
+    },
+    "./bin": {
+      "bun": "./src/bin.ts",
+      "default": "./dist/bin.mjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
