@@ -6,6 +6,7 @@ import {
 } from "../../../domains/mail/index/categories.ts";
 import { openEnvelopeIndex, parseMailboxUrl } from "../../../domains/mail/index/envelopeDirect.ts";
 import { parseEmlx } from "../../../domains/mail/index/emlxParser.ts";
+import { getMailIndex } from "../../../domains/mail/index/manager.ts";
 import type { EmailFull, MailCategory } from "../../../domains/mail/mail.types.ts";
 import type { ToolModule } from "../../../types.ts";
 
@@ -98,10 +99,19 @@ export const TOOL: ToolModule = {
         ? await displayNameForUuid(mailboxParsed.uuid)
         : (args.account ?? "");
 
-      const fromIndex = handle.db
-        .query("SELECT emlx_path FROM emails WHERE message_id = ? LIMIT 1")
-        .get(row.message_id) as { emlx_path: string | null } | null;
-      const emlxPath = fromIndex?.emlx_path ?? null;
+      // Look up the on-disk .emlx path from our local FTS5 index when it is
+      // initialised. Without the local index we fall straight through to the
+      // envelope-only response (no body, no recipients) which is still useful.
+      let emlxPath: string | null = null;
+      try {
+        const localDb = getMailIndex().getDb();
+        const fromIndex = localDb
+          .query("SELECT emlx_path FROM emails WHERE message_id = ? LIMIT 1")
+          .get(row.message_id) as { emlx_path: string | null } | null;
+        emlxPath = fromIndex?.emlx_path ?? null;
+      } catch {
+        // Mail plugin not initialised in this process. Skip the disk path.
+      }
       if (emlxPath) {
         try {
           const parsed = await parseEmlx(emlxPath);

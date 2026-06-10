@@ -78,13 +78,25 @@ Run `mac-mcp doctor` after install to verify permissions.
 ## Development
 
 ```bash
-bun install   # install dependencies
-bun test      # run all tests (bun's runner; supports bun:sqlite natively)
-bun run check # lint + format + fallow code-quality, in parallel
-bun run lint  # vp lint (oxlint with full TS typecheck)
-bun run fmt   # vp fmt --check
+bun install        # install dependencies
+bun test           # unit + integration tests (CI-safe; e2e tests skip themselves)
+bun run test:e2e   # live end-to-end tests; requires macOS + FDA + Mail.app data
+bun run check      # lint + format + fallow code-quality, in parallel
+bun run lint       # vp lint (oxlint with full TS typecheck)
+bun run fmt        # vp fmt --check
 bun run fmt:fix
-bun run build # vp pack
+bun run build      # vp pack
+```
+
+### End-to-end tests
+
+`tests/e2e/` contains tests that hit the real Mail.app + Envelope Index on the local machine. They require Full Disk Access and a configured Mail account, so they only run when `MAC_MCP_E2E=1` is set. CI never sets this env var; the tests skip cleanly on every CI run.
+
+Coverage includes the five Mail tools called directly against the live data (sort order, unread / category / account grouping, multi-account filter, get-email round-trip) plus a full MCP stdio round-trip that spawns the actual `mac-mcp serve` binary and drives it as a real MCP client over JSON-RPC.
+
+```bash
+# Grant Full Disk Access to your terminal first.
+bun run test:e2e
 ```
 
 ## License

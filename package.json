@@ -31,6 +31,7 @@
     "build": "vp pack",
     "dev": "vp pack --watch",
     "test": "bun test",
+    "test:e2e": "MAC_MCP_E2E=1 bun test tests/e2e",
     "lint": "vp lint",
     "fmt": "vp fmt --check",
     "fmt:fix": "vp fmt --write",
