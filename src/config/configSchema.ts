@@ -17,7 +17,7 @@ export interface Config {
   };
 }
 
-type ValueType = "number" | "string" | "string[]" | "domain[]";
+export type ValueType = "number" | "string" | "string[]" | "domain[]";
 
 export interface SchemaEntry {
   /** Dotted path into Config, e.g. "domains.enabled". */

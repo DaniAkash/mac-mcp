@@ -16,7 +16,7 @@ export function ensureWritable(): void {
 }
 
 /** The list of name prefixes that mark a tool as performing a write. */
-export const WRITE_TOOL_PREFIXES = [
+const WRITE_TOOL_PREFIXES = [
   "send_",
   "delete_",
   "move_",

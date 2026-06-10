@@ -88,8 +88,8 @@ function loadCore(name: string): string {
 }
 
 /**
- * Test helper: list the names of cores currently bundled. Used by the
- * read-only moat to enumerate scripts to sweep.
+ * List the names of cores currently bundled. Used by tests and diagnostics
+ * to enumerate which JXA helpers are available.
  */
 export function listCores(): string[] {
   try {

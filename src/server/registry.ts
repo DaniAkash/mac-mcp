@@ -122,11 +122,6 @@ export async function buildRegistry(server: McpServer, config: Config): Promise<
   return { plugins, toolNames, resourceUris };
 }
 
-/** Test helper: register a domain loader at runtime (do NOT use in production code). */
-export function _registerDomainLoaderForTests(name: DomainName, loader: DomainLoader): void {
-  DOMAIN_LOADERS[name] = loader;
-}
-
 /** Test helper: clear all loaders. */
 export function _resetDomainLoadersForTests(): void {
   for (const k of Object.keys(DOMAIN_LOADERS)) {
