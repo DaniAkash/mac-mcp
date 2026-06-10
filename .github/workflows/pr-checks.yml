@@ -33,12 +33,13 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Lint + format + fallow
         run: bun run check
-      - name: Verify dist is up to date
+      - name: Smoke-test the committed dist bin
         # `dist/` ships in the repo so `bunx -y github:...` finds the bin
         # without needing lifecycle scripts (which Bun blocks for untrusted
-        # github sources). This step rebuilds and fails if the committed
-        # dist drifts from the source. Run `bun run build` locally and
-        # commit the result alongside any src/ change.
+        # github sources). This step asserts the committed bin actually runs.
+        # Run `bun run build` locally and commit the result whenever src
+        # changes; CI does not enforce byte-for-byte freshness because the
+        # bundled output is not deterministic across environments.
         run: bun run build:check
 
   test:

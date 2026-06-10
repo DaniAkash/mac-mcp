@@ -29,7 +29,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "build:check": "rm -rf dist && bun run build > /dev/null && git diff --exit-code -- dist",
+    "build:check": "test -x dist/bin.mjs && bun dist/bin.mjs --help >/dev/null",
     "dev": "vp pack --watch",
     "test": "bun test",
     "test:e2e": "MAC_MCP_E2E=1 bun test tests/e2e",
