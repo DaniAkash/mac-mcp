@@ -257,5 +257,8 @@ export function searchEvents(opts: SearchEventsOpts): EventSearchResult {
 }
 
 export function isCalendarAvailable(): boolean {
-  return existsSync(CALENDAR_DB_PATH);
+  const db = open();
+  if (!db) return false;
+  db.close();
+  return true;
 }
