@@ -110,8 +110,9 @@ bun run check      # lint + format + fallow code-quality, in parallel
 bun run lint       # vp lint (oxlint with full TS typecheck)
 bun run fmt        # vp fmt --check
 bun run fmt:fix
-bun run build      # vp pack
 ```
+
+There is no build step: Bun executes the TypeScript bin (`src/bin.ts`) directly, both for `bun src/bin.ts` during development and for consumers via `bunx -y github:DaniAkash/mac-mcp`. The package ships its `src/` directory and Bun handles the rest.
 
 ### End-to-end tests
 

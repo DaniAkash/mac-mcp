@@ -13,32 +13,28 @@
     "url": "git+https://github.com/DaniAkash/mac-mcp.git"
   },
   "bin": {
-    "mac-mcp": "./dist/bin.mjs"
+    "mac-mcp": "./src/bin.ts"
   },
   "files": [
-    "dist"
+    "src"
   ],
   "type": "module",
   "exports": {
-    ".": "./dist/index.mjs",
-    "./bin": "./dist/bin.mjs",
+    ".": "./src/index.ts",
+    "./bin": "./src/bin.ts",
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "vp pack",
-    "build:check": "test -x dist/bin.mjs && bun dist/bin.mjs --help >/dev/null",
-    "dev": "vp pack --watch",
     "test": "bun test",
     "test:e2e": "MAC_MCP_E2E=1 bun test tests/e2e",
-    "lint": "vp lint --ignore-path=.oxlintignore",
-    "fmt": "vp fmt --check --ignore-path=.oxfmtignore",
-    "fmt:fix": "vp fmt --write --ignore-path=.oxfmtignore",
+    "lint": "vp lint",
+    "fmt": "vp fmt --check",
+    "fmt:fix": "vp fmt --write",
     "fallow": "fallow check",
     "check": "concurrently --group --names lint,fmt,fallow --prefix-colors auto \"bun run lint\" \"bun run fmt\" \"bun run fallow\"",
-    "prepublishOnly": "vp run build",
     "prepare": "vp config"
   },
   "dependencies": {

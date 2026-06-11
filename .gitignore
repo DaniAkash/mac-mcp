@@ -1,9 +1,4 @@
 node_modules
+dist
 *.log
 .DS_Store
-
-# dist/ ships in this repo so `bunx -y github:DaniAkash/mac-mcp` finds the bin
-# without lifecycle scripts. The leading `!` negates the global gitignore
-# entry at ~/.config/git/ignore which would otherwise hide it.
-!dist/
-!dist/**
