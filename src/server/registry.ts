@@ -22,6 +22,14 @@ const DOMAIN_LOADERS: Partial<Record<DomainName, DomainLoader>> = {
     const { buildContactsPlugin } = await import("../domains/contacts/plugin.ts");
     return buildContactsPlugin();
   },
+  calendar: async () => {
+    const { buildCalendarPlugin } = await import("../domains/calendar/plugin.ts");
+    return buildCalendarPlugin();
+  },
+  reminders: async () => {
+    const { buildRemindersPlugin } = await import("../domains/reminders/plugin.ts");
+    return buildRemindersPlugin();
+  },
 };
 
 export interface Registry {

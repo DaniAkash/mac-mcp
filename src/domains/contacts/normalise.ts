@@ -1,6 +1,7 @@
+import { coreDataDateToIso } from "../../utils/coreDataDate.ts";
 import type { ContactFull, ContactSummary } from "./contacts.types.ts";
 
-const CORE_DATA_EPOCH_OFFSET_S = 978_307_200;
+export { coreDataDateToIso };
 
 /**
  * Strip Apple's localised-label wrapper `_$!<Label>!$_` so consumers see a
@@ -44,16 +45,6 @@ export function normalisePhone(args: {
   if (raw.length === 0) return "";
   const cleaned = raw.replace(/[\s\-().]/g, "");
   return cleaned;
-}
-
-/** Core Data timestamp -> ISO 8601 string, or undefined when null/invalid. */
-export function coreDataDateToIso(value: number | null | undefined): string | undefined {
-  if (value === null || value === undefined) return undefined;
-  if (!Number.isFinite(value)) return undefined;
-  const epochMs = (value + CORE_DATA_EPOCH_OFFSET_S) * 1000;
-  const d = new Date(epochMs);
-  if (Number.isNaN(d.getTime())) return undefined;
-  return d.toISOString();
 }
 
 export function composeDisplayName(args: {
