@@ -3,13 +3,9 @@ import {
   m as detectMailDir,
   o as logger,
   v as DEFAULT_INDEX_DIR,
-} from "./server-7_N-3K5h.mjs";
-import {
-  i as MAIL_CORE,
-  n as createConnection,
-  r as createReadOnlyConnection,
-  s as runJxa,
-} from "./sqlite-Kls5q_80.mjs";
+} from "./server-Cteav2SD.mjs";
+import { i as runJxa, t as MAIL_CORE } from "./mailCore-c4Jx_0WF.mjs";
+import { n as createConnection, r as createReadOnlyConnection } from "./sqlite-D4XgEJnA.mjs";
 import { basename, join, sep } from "node:path";
 import { readdir, stat } from "node:fs/promises";
 import { z } from "zod";
