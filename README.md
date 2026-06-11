@@ -10,9 +10,9 @@ Bootstrapped with [Vite+](https://viteplus.dev/) and Bun. Status: Mail domain sh
 | -------------------- | -------------- |
 | Mail                 | shipped (v0.1) |
 | Spotlight            | shipped        |
+| Contacts             | shipped        |
 | Notes                | planned        |
 | Calendar / Reminders | planned        |
-| Contacts             | planned        |
 | Messages             | planned        |
 
 The server is read-only by construction. There is no CLI flag, env var, or config key that enables writes. A regression test sweeps every JXA template for write-capable Apple Events phrases (`set readStatus`, `move to`, `delete`, `send`, etc.) and another sweeps every tool / domain module to ensure they only spawn read-only system commands (`osascript`, `mdfind`).
@@ -72,6 +72,18 @@ One read-only tool: `spotlight_search`.
 | `limit` | number                            | 25       | Hard cap 100.                                                                             |
 
 The macOS Spotlight index (`mds`) is already maintained by the OS; we never build our own. Subprocess runs `mdfind` with a 5-second per-call timeout; truncated indicates more matches existed beyond the limit.
+
+## Contacts tools
+
+Three read-only tools.
+
+| Tool              | What it does                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `contacts_list`   | Page through contacts merged across every AddressBook source; output is sorted by display name.                                      |
+| `contacts_get`    | Fetch a full record by Apple's `ZUNIQUEID` (`<GUID>:ABPerson`). Includes every email, phone, postal address, URL, and the note text. |
+| `contacts_search` | Substring search by `name` (first/last/nick/organisation), `email` (normalised), `phone` (digits or last-four), or `all`.            |
+
+Cross-source dedup uses a soft key of `(displayName, primaryEmail)`; collisions keep the source with the higher completeness score and fold the dropped source UUID into the kept record. Phones normalise to E.164 when AddressBook stored the parsed parts (country code + area code + local number); otherwise we strip whitespace and punctuation from the display value. No FTS5 index - LIKE queries against the indexed columns are fast enough at the volumes a personal address book holds.
 
 ## MCP client config
 

@@ -425,12 +425,16 @@ async function readIndexStatus(plugins) {
  */
 const DOMAIN_LOADERS = {
   mail: async (config) => {
-    const { buildMailPlugin } = await import("./plugin-C4IwwcnV.mjs");
+    const { buildMailPlugin } = await import("./plugin-BJcExnKl.mjs");
     return buildMailPlugin(config);
   },
   spotlight: async () => {
-    const { buildSpotlightPlugin } = await import("./plugin-DVcC4aGx.mjs");
+    const { buildSpotlightPlugin } = await import("./plugin-DmhAdsU8.mjs");
     return buildSpotlightPlugin();
+  },
+  contacts: async () => {
+    const { buildContactsPlugin } = await import("./plugin-w3YYQIu1.mjs");
+    return buildContactsPlugin();
   },
 };
 async function buildRegistry(server, config) {
