@@ -51,6 +51,15 @@ function open(store: ReminderStore): Database {
   return createReadOnlyConnection(store.dbPath);
 }
 
+/** Open a store, swallowing per-file errors so one unreadable store doesn't kill the whole query. */
+function tryOpen(store: ReminderStore): Database | null {
+  try {
+    return open(store);
+  } catch {
+    return null;
+  }
+}
+
 /** ZIDENTIFIER is BLOB but stores UTF-8 text. Decode safely. */
 function decodeIdentifier(value: Uint8Array | string | null): string {
   if (value === null) return "";
@@ -80,7 +89,8 @@ export function listLists(): ListsResult {
   }
   const out: ReminderList[] = [];
   for (const store of stores) {
-    const db = open(store);
+    const db = tryOpen(store);
+    if (!db) continue;
     try {
       const rows = db
         .query(
@@ -216,19 +226,20 @@ export function listReminders(opts: ListRemindersOpts = {}): RemindersResult {
   const status: RemindersStatus = opts.status ?? "open";
   const all: ReminderSummary[] = [];
   for (const store of stores) {
-    const db = open(store);
+    const db = tryOpen(store);
+    if (!db) continue;
     try {
       const where: string[] = [];
       const params: (string | number)[] = [];
       if (opts.list) {
-        where.push("l.ZIDENTIFIER = ?");
+        where.push("CAST(l.ZIDENTIFIER AS TEXT) = ?");
         params.push(opts.list);
       }
       const extraWhere = where.length > 0 ? ` AND ${where.join(" AND ")}` : "";
       const sql = `
         SELECT ${REMINDER_SELECT}
         ${REMINDER_FROM}${statusClause(status)}${extraWhere}
-        ORDER BY r.ZDUEDATE, r.ZCREATIONDATE DESC
+        ORDER BY r.ZDUEDATE IS NULL, r.ZDUEDATE, r.ZCREATIONDATE DESC
         LIMIT ?
       `;
       params.push(limit + 1);
@@ -248,13 +259,14 @@ export function listReminders(opts: ListRemindersOpts = {}): RemindersResult {
 export function getReminder(id: string): ReminderFull | null {
   const stores = detectStores();
   for (const store of stores) {
-    const db = open(store);
+    const db = tryOpen(store);
+    if (!db) continue;
     try {
       const row = db
         .query(
           `SELECT ${REMINDER_SELECT}
            ${REMINDER_FROM}
-             AND r.ZIDENTIFIER = ?
+             AND CAST(r.ZIDENTIFIER AS TEXT) = ?
            LIMIT 1`,
         )
         .get(id) as ReminderRow | null;
@@ -287,13 +299,14 @@ export function searchReminders(opts: SearchOpts): RemindersSearchResult {
   const like = `%${opts.query}%`;
   const all: ReminderSummary[] = [];
   for (const store of stores) {
-    const db = open(store);
+    const db = tryOpen(store);
+    if (!db) continue;
     try {
       const sql = `
         SELECT ${REMINDER_SELECT}
         ${REMINDER_FROM}${statusClause(status)}
           AND (COALESCE(r.ZTITLE, '') LIKE ? OR COALESCE(r.ZNOTES, '') LIKE ?)
-        ORDER BY r.ZDUEDATE, r.ZCREATIONDATE DESC
+        ORDER BY r.ZDUEDATE IS NULL, r.ZDUEDATE, r.ZCREATIONDATE DESC
         LIMIT ?
       `;
       const rows = db.query(sql).all(like, like, limit + 1) as ReminderRow[];
