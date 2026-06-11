@@ -14,7 +14,7 @@ const inputShape = {
 export const TOOL: ToolModule = {
   name: "contacts_get",
   description:
-    "Fetch a full contact record by Apple ZUNIQUEID, including every email, phone, postal address, URL, and the note text. Returns null when no source contains the id.",
+    "Fetch a full contact record by Apple ZUNIQUEID, including every email, phone, postal address, URL, and the note text. When no source contains the id, returns an error envelope { error: string } instead of throwing.",
   inputShape,
   domain: "contacts",
   handler: async (input) => {

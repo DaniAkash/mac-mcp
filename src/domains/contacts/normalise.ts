@@ -17,9 +17,16 @@ export function unwrapLabel(label: string | null | undefined): string | undefine
 
 /**
  * Best-effort phone normalisation without pulling libphonenumber. Output is
- * good enough for personal-use lookups: prefer the parsed parts when
- * present, otherwise strip whitespace and punctuation from the display
- * value. Returns the empty string when no digits survive.
+ * good enough for personal-use lookups:
+ *
+ * - When AddressBook parsed the number (countryCode + areaCode +
+ *   localNumber are all set), returns strict E.164 (`+CCDDDDDDDD`, plus
+ *   `;ext=N` when an extension is set).
+ * - Otherwise, strips whitespace and `- ( ) .` from the display value and
+ *   returns whatever survives. Non-digit characters can come through here:
+ *   vanity numbers like `1-800-MY-APPLE` intentionally land as
+ *   `1800MYAPPLE` so the value remains recognisable to the user.
+ * - Returns the empty string only when the input is null or empty.
  */
 export function normalisePhone(args: {
   full: string | null;
@@ -66,16 +73,14 @@ export function composeDisplayName(args: {
 }
 
 /**
- * Pivot a pipe-encoded GROUP_CONCAT string back into entries. Each item is
- * separated by `` (the record separator we picked for SQL), and each
- * item carries `value|label`.
+ * Pivot a GROUP_CONCAT'd string back into a list of values. Items are
+ * separated by ASCII RS (0x1E) - that is the separator we chose for the
+ * SQL aggregate so commas and other "normal" punctuation in real data
+ * never collide with the delimiter.
  */
-export function pivotPipeEncoded(value: string | null): { value: string; label?: string }[] {
+export function pivotPipeEncoded(value: string | null): string[] {
   if (!value) return [];
-  return value
-    .split("\x1E")
-    .filter((s) => s.length > 0)
-    .map((item) => ({ value: item }));
+  return value.split("\x1E").filter((s) => s.length > 0);
 }
 
 function completenessScore(c: ContactFull): number {

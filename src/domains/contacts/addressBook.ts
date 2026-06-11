@@ -43,9 +43,28 @@ const SUMMARY_COLUMNS = `
   r.ZMODIFICATIONDATE AS modification_date
 `;
 
+// SQLite GROUP_CONCAT preserves input row order, so we wrap each aggregate
+// in a subquery that pre-orders by ZISPRIMARY DESC, ZORDERINGINDEX. Without
+// this the "first" email/phone (used as primaryEmail / primaryPhone) is
+// non-deterministic across runs, which makes the (displayName, primaryEmail)
+// dedup key flaky and produces intermittent duplicates in contacts_list.
 const SUMMARY_AGGREGATES = `
-  (SELECT GROUP_CONCAT(e.ZADDRESS, '${RS}') FROM ZABCDEMAILADDRESS e WHERE e.ZOWNER = r.Z_PK) AS emails_pipe,
-  (SELECT GROUP_CONCAT(p.ZFULLNUMBER, '${RS}') FROM ZABCDPHONENUMBER p WHERE p.ZOWNER = r.Z_PK) AS phones_pipe
+  (
+    SELECT GROUP_CONCAT(addr, '${RS}') FROM (
+      SELECT e.ZADDRESS AS addr
+      FROM ZABCDEMAILADDRESS e
+      WHERE e.ZOWNER = r.Z_PK
+      ORDER BY e.ZISPRIMARY DESC, e.ZORDERINGINDEX
+    )
+  ) AS emails_pipe,
+  (
+    SELECT GROUP_CONCAT(num, '${RS}') FROM (
+      SELECT p.ZFULLNUMBER AS num
+      FROM ZABCDPHONENUMBER p
+      WHERE p.ZOWNER = r.Z_PK
+      ORDER BY p.ZISPRIMARY DESC, p.ZORDERINGINDEX
+    )
+  ) AS phones_pipe
 `;
 
 const CONTACT_WHERE = `r.Z_ENT IN (${CONTACT_ENT_VALUES.join(", ")})`;
@@ -87,10 +106,10 @@ export function detectSources(): ContactSource[] {
 }
 
 function rowToSummary(row: SummaryRow, source: string): ContactSummary {
-  const emails = pivotPipeEncoded(row.emails_pipe).map((e) => e.value);
-  const phones = pivotPipeEncoded(row.phones_pipe).map((p) =>
+  const emails = pivotPipeEncoded(row.emails_pipe);
+  const phones = pivotPipeEncoded(row.phones_pipe).map((full) =>
     normalisePhone({
-      full: p.value,
+      full,
       countryCode: null,
       areaCode: null,
       localNumber: null,
@@ -159,7 +178,12 @@ function searchSummariesForSource(source: ContactSource, opts: SearchOpts): Cont
     const emailPred =
       "EXISTS (SELECT 1 FROM ZABCDEMAILADDRESS e WHERE e.ZOWNER = r.Z_PK AND COALESCE(e.ZADDRESSNORMALIZED, LOWER(e.ZADDRESS)) LIKE ?)";
     const phonePred =
-      "EXISTS (SELECT 1 FROM ZABCDPHONENUMBER p WHERE p.ZOWNER = r.Z_PK AND (REPLACE(REPLACE(REPLACE(p.ZFULLNUMBER, ' ', ''), '-', ''), '+', '') LIKE ? OR p.ZLASTFOURDIGITS LIKE ?))";
+      // The strip chain must mirror what the TS query-side normaliser does
+      // (digits-only). ZFULLNUMBER stores user-typed strings that often
+      // include parens, dots, and other punctuation; without those in the
+      // chain, queries like `5551234567` miss a contact stored as
+      // `(555) 123-4567`.
+      "EXISTS (SELECT 1 FROM ZABCDPHONENUMBER p WHERE p.ZOWNER = r.Z_PK AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(p.ZFULLNUMBER, ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '') LIKE ? OR p.ZLASTFOURDIGITS LIKE ?))";
 
     if (opts.field === "name" || opts.field === "all") {
       preds.push(namePred);
@@ -396,6 +420,15 @@ export function getContact(id: string): ContactFull | null {
       if (birthday) full.birthday = birthday;
       const creation = coreDataDateToIso(row.ZCREATIONDATE);
       if (creation) full.creationDate = creation;
+      // The full SELECT does not include the aggregate pipes used by
+      // rowToSummary, so primary{Email,Phone} are undefined on the inherited
+      // ContactSummary fields. Backfill from the per-row queries (which are
+      // already ordered by ZISPRIMARY DESC) so contacts_get and
+      // contacts_list expose the same shape.
+      if (!full.primaryEmail && full.emails[0]) full.primaryEmail = full.emails[0].address;
+      if (!full.primaryPhone && full.phones[0]?.normalized.length) {
+        full.primaryPhone = full.phones[0].normalized;
+      }
       return full;
     } finally {
       db.close();

@@ -1,4 +1,4 @@
-import { r as createReadOnlyConnection } from "./sqlite-D4XgEJnA.mjs";
+import { r as createReadOnlyConnection } from "./sqlite-BafV4e8X.mjs";
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -18,9 +18,16 @@ function unwrapLabel(label) {
 }
 /**
  * Best-effort phone normalisation without pulling libphonenumber. Output is
- * good enough for personal-use lookups: prefer the parsed parts when
- * present, otherwise strip whitespace and punctuation from the display
- * value. Returns the empty string when no digits survive.
+ * good enough for personal-use lookups:
+ *
+ * - When AddressBook parsed the number (countryCode + areaCode +
+ *   localNumber are all set), returns strict E.164 (`+CCDDDDDDDD`, plus
+ *   `;ext=N` when an extension is set).
+ * - Otherwise, strips whitespace and `- ( ) .` from the display value and
+ *   returns whatever survives. Non-digit characters can come through here:
+ *   vanity numbers like `1-800-MY-APPLE` intentionally land as
+ *   `1800MYAPPLE` so the value remains recognisable to the user.
+ * - Returns the empty string only when the input is null or empty.
  */
 function normalisePhone(args) {
   const digits = (s) => (s ?? "").replace(/\D+/g, "");
@@ -49,16 +56,14 @@ function composeDisplayName(args) {
   return "(no name)";
 }
 /**
- * Pivot a pipe-encoded GROUP_CONCAT string back into entries. Each item is
- * separated by `` (the record separator we picked for SQL), and each
- * item carries `value|label`.
+ * Pivot a GROUP_CONCAT'd string back into a list of values. Items are
+ * separated by ASCII RS (0x1E) - that is the separator we chose for the
+ * SQL aggregate so commas and other "normal" punctuation in real data
+ * never collide with the delimiter.
  */
 function pivotPipeEncoded(value) {
   if (!value) return [];
-  return value
-    .split("")
-    .filter((s) => s.length > 0)
-    .map((item) => ({ value: item }));
+  return value.split("").filter((s) => s.length > 0);
 }
 function completenessScore(c) {
   let score = 0;
@@ -130,8 +135,22 @@ const SUMMARY_COLUMNS = `
   r.ZMODIFICATIONDATE AS modification_date
 `;
 const SUMMARY_AGGREGATES = `
-  (SELECT GROUP_CONCAT(e.ZADDRESS, '${RS}') FROM ZABCDEMAILADDRESS e WHERE e.ZOWNER = r.Z_PK) AS emails_pipe,
-  (SELECT GROUP_CONCAT(p.ZFULLNUMBER, '${RS}') FROM ZABCDPHONENUMBER p WHERE p.ZOWNER = r.Z_PK) AS phones_pipe
+  (
+    SELECT GROUP_CONCAT(addr, '${RS}') FROM (
+      SELECT e.ZADDRESS AS addr
+      FROM ZABCDEMAILADDRESS e
+      WHERE e.ZOWNER = r.Z_PK
+      ORDER BY e.ZISPRIMARY DESC, e.ZORDERINGINDEX
+    )
+  ) AS emails_pipe,
+  (
+    SELECT GROUP_CONCAT(num, '${RS}') FROM (
+      SELECT p.ZFULLNUMBER AS num
+      FROM ZABCDPHONENUMBER p
+      WHERE p.ZOWNER = r.Z_PK
+      ORDER BY p.ZISPRIMARY DESC, p.ZORDERINGINDEX
+    )
+  ) AS phones_pipe
 `;
 const CONTACT_WHERE = `r.Z_ENT IN (${CONTACT_ENT_VALUES.join(", ")})`;
 /**
@@ -159,10 +178,10 @@ function detectSources() {
   return sources;
 }
 function rowToSummary(row, source) {
-  const emails = pivotPipeEncoded(row.emails_pipe).map((e) => e.value);
-  const phones = pivotPipeEncoded(row.phones_pipe).map((p) =>
+  const emails = pivotPipeEncoded(row.emails_pipe);
+  const phones = pivotPipeEncoded(row.phones_pipe).map((full) =>
     normalisePhone({
-      full: p.value,
+      full,
       countryCode: null,
       areaCode: null,
       localNumber: null,
@@ -217,7 +236,7 @@ function searchSummariesForSource(source, opts) {
     const emailPred =
       "EXISTS (SELECT 1 FROM ZABCDEMAILADDRESS e WHERE e.ZOWNER = r.Z_PK AND COALESCE(e.ZADDRESSNORMALIZED, LOWER(e.ZADDRESS)) LIKE ?)";
     const phonePred =
-      "EXISTS (SELECT 1 FROM ZABCDPHONENUMBER p WHERE p.ZOWNER = r.Z_PK AND (REPLACE(REPLACE(REPLACE(p.ZFULLNUMBER, ' ', ''), '-', ''), '+', '') LIKE ? OR p.ZLASTFOURDIGITS LIKE ?))";
+      "EXISTS (SELECT 1 FROM ZABCDPHONENUMBER p WHERE p.ZOWNER = r.Z_PK AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(p.ZFULLNUMBER, ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '') LIKE ? OR p.ZLASTFOURDIGITS LIKE ?))";
     if (opts.field === "name" || opts.field === "all") {
       preds.push(namePred);
       params.push(like, like, like, like);
@@ -407,6 +426,9 @@ function getContact(id) {
       if (birthday) full.birthday = birthday;
       const creation = coreDataDateToIso(row.ZCREATIONDATE);
       if (creation) full.creationDate = creation;
+      if (!full.primaryEmail && full.emails[0]) full.primaryEmail = full.emails[0].address;
+      if (!full.primaryPhone && full.phones[0]?.normalized.length)
+        full.primaryPhone = full.phones[0].normalized;
       return full;
     } finally {
       db.close();
@@ -427,7 +449,7 @@ const inputShape$2 = {
 const TOOL$2 = {
   name: "contacts_get",
   description:
-    "Fetch a full contact record by Apple ZUNIQUEID, including every email, phone, postal address, URL, and the note text. Returns null when no source contains the id.",
+    "Fetch a full contact record by Apple ZUNIQUEID, including every email, phone, postal address, URL, and the note text. When no source contains the id, returns an error envelope { error: string } instead of throwing.",
   inputShape: inputShape$2,
   domain: "contacts",
   handler: async (input) => {

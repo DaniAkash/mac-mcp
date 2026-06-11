@@ -425,15 +425,15 @@ async function readIndexStatus(plugins) {
  */
 const DOMAIN_LOADERS = {
   mail: async (config) => {
-    const { buildMailPlugin } = await import("./plugin-DosxwIR0.mjs");
+    const { buildMailPlugin } = await import("./plugin-BJcExnKl.mjs");
     return buildMailPlugin(config);
   },
   spotlight: async () => {
-    const { buildSpotlightPlugin } = await import("./plugin-DPawk-mV.mjs");
+    const { buildSpotlightPlugin } = await import("./plugin-DmhAdsU8.mjs");
     return buildSpotlightPlugin();
   },
   contacts: async () => {
-    const { buildContactsPlugin } = await import("./plugin-BO3AWKfd.mjs");
+    const { buildContactsPlugin } = await import("./plugin-w3YYQIu1.mjs");
     return buildContactsPlugin();
   },
 };

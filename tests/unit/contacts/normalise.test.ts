@@ -61,6 +61,17 @@ describe("normalisePhone", () => {
       }),
     ).toBe("7373074962");
   });
+  test("vanity numbers come through with letters preserved (doc-confirmed behaviour)", () => {
+    expect(
+      normalisePhone({
+        full: "1-800-MY-APPLE",
+        countryCode: null,
+        areaCode: null,
+        localNumber: null,
+        extension: null,
+      }),
+    ).toBe("1800MYAPPLE");
+  });
   test("preserves leading + when no parsed parts", () => {
     expect(
       normalisePhone({
@@ -155,15 +166,11 @@ describe("composeDisplayName", () => {
 
 describe("pivotPipeEncoded", () => {
   test("splits records by ASCII RS (0x1E)", () => {
-    expect(pivotPipeEncoded("a\x1Eb\x1Ec")).toEqual([
-      { value: "a" },
-      { value: "b" },
-      { value: "c" },
-    ]);
+    expect(pivotPipeEncoded("a\x1Eb\x1Ec")).toEqual(["a", "b", "c"]);
   });
   test("drops empty segments and handles single value", () => {
-    expect(pivotPipeEncoded("only")).toEqual([{ value: "only" }]);
-    expect(pivotPipeEncoded("\x1Ea\x1E\x1Eb\x1E")).toEqual([{ value: "a" }, { value: "b" }]);
+    expect(pivotPipeEncoded("only")).toEqual(["only"]);
+    expect(pivotPipeEncoded("\x1Ea\x1E\x1Eb\x1E")).toEqual(["a", "b"]);
   });
   test("null and empty return []", () => {
     expect(pivotPipeEncoded(null)).toEqual([]);
