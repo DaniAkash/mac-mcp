@@ -51,6 +51,22 @@ export interface SearchResult extends EmailSummary {
   bm25Score: number;
 }
 
+export type EmailLinkKind = "http" | "mailto" | "tel" | "other";
+
+export interface EmailLink {
+  url: string;
+  text?: string;
+  kind: EmailLinkKind;
+  inHeader?: boolean;
+}
+
+export interface EmailLinksResult {
+  source: "html" | "text" | "both";
+  links: EmailLink[];
+  totalReturned: number;
+  truncated: boolean;
+}
+
 export interface EmlxParseResult {
   id: number;
   emlxPath: string;

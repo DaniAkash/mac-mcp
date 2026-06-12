@@ -21,6 +21,7 @@ import { _clearAccountMapForTests } from "../../src/domains/mail/index/accountMa
 import { openEnvelopeIndex } from "../../src/domains/mail/index/envelopeDirect.ts";
 import { _resetMailIndexForTests, getMailIndex } from "../../src/domains/mail/index/manager.ts";
 import { TOOL as getEmailTool } from "../../src/server/tools/mail/getEmail.ts";
+import { TOOL as getEmailLinksTool } from "../../src/server/tools/mail/getEmailLinks.ts";
 import { TOOL as getEmailsTool } from "../../src/server/tools/mail/getEmails.ts";
 import { TOOL as listAccountsTool } from "../../src/server/tools/mail/listAccounts.ts";
 import { TOOL as listMailboxesTool } from "../../src/server/tools/mail/listMailboxes.ts";
@@ -255,6 +256,70 @@ describe.skipIf(!E2E)("mail e2e: direct handler calls against live Mail data", (
       const recipientCount =
         result.recipients.to.length + result.recipients.cc.length + result.recipients.bcc.length;
       expect(recipientCount).toBeGreaterThan(0);
+    } finally {
+      _resetMailIndexForTests();
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("mail_get_email_links: unknown messageId returns an error envelope", async () => {
+    const r = (await getEmailLinksTool.handler({ messageId: 999_999_999 })) as { error?: string };
+    expect(r.error).toBeDefined();
+  });
+
+  test("mail_get_email_links: returns a links array shape for a real indexed email", async () => {
+    const list = (await getEmailsTool.handler({ limit: 1 })) as EmailsFlat & {
+      emails: (EmailsFlat["emails"][number] & { mailbox?: string; account?: string })[];
+    };
+    const first = list.emails[0];
+    if (!first) return;
+    const { accounts } = (await listAccountsTool.handler({})) as AccountsResult;
+    const accountUuid = accounts.find((a) => a.name === first.account)?.id;
+    const mailbox = first.mailbox;
+    if (!accountUuid || !mailbox) return;
+    const mailDir = detectMailDir();
+    if (!mailDir) return;
+    const mailboxPath = mailbox
+      .split("/")
+      .map((s) => `${s}.mbox`)
+      .join("/");
+    const searchRoot = `${mailDir.path}/${accountUuid}/${mailboxPath}`;
+    const candidates = await Array.fromAsync(glob(`${searchRoot}/**/${first.id}.emlx`));
+    const emlxPath = candidates[0];
+    if (!emlxPath) return;
+    const tmp = mkdtempSync(join(tmpdir(), "mac-mcp-e2e-links-"));
+    try {
+      _resetMailIndexForTests();
+      const mgr = getMailIndex({
+        indexDir: tmp,
+        maxEmailsPerMailbox: 0,
+        excludeMailboxes: [],
+        syncIntervalSeconds: 86400,
+      });
+      mgr.getDb().run(
+        `INSERT INTO emails (message_id, account, mailbox, subject, sender, content, date_received, date_sent, emlx_path, category, is_unread, is_flagged, attachment_count)
+         VALUES (?, ?, ?, '', '', '', '', '', ?, NULL, 1, 0, 0)`,
+        [first.id, accountUuid, mailbox, emlxPath],
+      );
+      const r = (await getEmailLinksTool.handler({
+        messageId: first.id,
+        account: first.account,
+        mailbox,
+        limit: 25,
+      })) as {
+        source?: string;
+        links?: { url: string; kind: string }[];
+        truncated?: boolean;
+        error?: string;
+      };
+      expect(r.error).toBeUndefined();
+      expect(r.source).toBeDefined();
+      expect(["html", "text", "both"]).toContain(r.source as string);
+      expect(Array.isArray(r.links)).toBe(true);
+      for (const l of r.links ?? []) {
+        expect(typeof l.url).toBe("string");
+        expect(["http", "mailto", "tel", "other"]).toContain(l.kind);
+      }
     } finally {
       _resetMailIndexForTests();
       rmSync(tmp, { recursive: true, force: true });
