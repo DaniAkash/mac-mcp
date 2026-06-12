@@ -3,6 +3,8 @@ import { DEFAULT_INDEX_DIR } from "../../constants.ts";
 import type { DomainIndexStatus, DomainPlugin } from "../../types.ts";
 import { logger } from "../../utils/logger.ts";
 import { TOOL as getEmailTool } from "../../server/tools/mail/getEmail.ts";
+import { TOOL as getEmailAttachmentTool } from "../../server/tools/mail/getEmailAttachment.ts";
+import { TOOL as getEmailAttachmentsTool } from "../../server/tools/mail/getEmailAttachments.ts";
 import { TOOL as getEmailLinksTool } from "../../server/tools/mail/getEmailLinks.ts";
 import { TOOL as getEmailsTool } from "../../server/tools/mail/getEmails.ts";
 import { TOOL as listAccountsTool } from "../../server/tools/mail/listAccounts.ts";
@@ -34,6 +36,8 @@ export function buildMailPlugin(config: Config): DomainPlugin {
       getEmailsTool,
       getEmailTool,
       getEmailLinksTool,
+      getEmailAttachmentsTool,
+      getEmailAttachmentTool,
       searchTool,
     ],
     async getIndexStatus(): Promise<DomainIndexStatus> {

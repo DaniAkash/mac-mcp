@@ -67,6 +67,27 @@ export interface EmailLinksResult {
   truncated: boolean;
 }
 
+export interface AttachmentSummary {
+  index: number;
+  filename: string;
+  contentType: string;
+  size: number;
+  contentDisposition: "attachment" | "inline";
+  contentId?: string;
+}
+
+export interface AttachmentsListResult {
+  attachments: AttachmentSummary[];
+  totalReturned: number;
+}
+
+export interface AttachmentBytesResult {
+  filename: string;
+  contentType: string;
+  size: number;
+  base64: string;
+}
+
 export interface EmlxParseResult {
   id: number;
   emlxPath: string;
