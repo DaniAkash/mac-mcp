@@ -6,14 +6,15 @@ Bootstrapped with [Vite+](https://viteplus.dev/) and Bun. Status: Mail domain sh
 
 ## Status
 
-| Domain               | State          |
-| -------------------- | -------------- |
-| Mail                 | shipped (v0.1) |
-| Spotlight            | shipped        |
-| Contacts             | shipped        |
-| Notes                | planned        |
-| Calendar / Reminders | planned        |
-| Messages             | planned        |
+| Domain    | State          |
+| --------- | -------------- |
+| Mail      | shipped (v0.1) |
+| Spotlight | shipped        |
+| Contacts  | shipped        |
+| Calendar  | shipped        |
+| Reminders | shipped        |
+| Notes     | planned        |
+| Messages  | planned        |
 
 The server is read-only by construction. There is no CLI flag, env var, or config key that enables writes. A regression test sweeps every JXA template for write-capable Apple Events phrases (`set readStatus`, `move to`, `delete`, `send`, etc.) and another sweeps every tool / domain module to ensure they only spawn read-only system commands (`osascript`, `mdfind`).
 
@@ -84,6 +85,28 @@ Three read-only tools.
 | `contacts_search` | Substring search by `name` (first/last/nick/organisation), `email` (normalised), `phone` (digits or last-four), or `all`.            |
 
 Cross-source dedup uses a soft key of `(displayName, primaryEmail)`; collisions keep the source with the higher completeness score and fold the dropped source UUID into the kept record. Phones normalise to E.164 when AddressBook stored the parsed parts (country code + area code + local number); otherwise we strip whitespace and punctuation from the display value. No FTS5 index - LIKE queries against the indexed columns are fast enough at the volumes a personal address book holds.
+
+## Calendar tools
+
+| Tool                      | What it does                                                                                             |
+| ------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `calendar_list_calendars` | List every calendar with id, title, type (`Local`, `CalDAV`, `Birthdays`, `Subscribed`, etc.) and color. |
+| `calendar_list_events`    | Events sorted by start time. Optional calendar id and YYYY-MM-DD date bounds.                            |
+| `calendar_get_event`      | Full event by UUID with description and last-modified.                                                   |
+| `calendar_search`         | Substring search across title, description, and location with optional date bounds.                      |
+
+Source: `~/Library/Group Containers/group.com.apple.calendar/Calendar.sqlitedb` (modern macOS path). Dates round-trip through Core Data's 2001-01-01 epoch.
+
+## Reminders tools
+
+| Tool                       | What it does                                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `reminders_list_lists`     | Every list across every account; `type` distinguishes regular lists from Smart Lists.                |
+| `reminders_list_reminders` | Reminders sorted by due date. Optional list id and `open`/`completed`/`all` status (default `open`). |
+| `reminders_get_reminder`   | Full reminder by identifier with notes, start/due/completion dates.                                  |
+| `reminders_search`         | Substring search across title and notes.                                                             |
+
+Source: one SQLite file per account under `~/Library/Group Containers/group.com.apple.reminders/Container_v1/Stores/`. The domain queries every store and merges results.
 
 ## MCP client config
 
