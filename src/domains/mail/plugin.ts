@@ -9,6 +9,7 @@ import { TOOL as getEmailLinksTool } from "../../server/tools/mail/getEmailLinks
 import { TOOL as getEmailsTool } from "../../server/tools/mail/getEmails.ts";
 import { TOOL as listAccountsTool } from "../../server/tools/mail/listAccounts.ts";
 import { TOOL as listMailboxesTool } from "../../server/tools/mail/listMailboxes.ts";
+import { TOOL as resolveAddressesTool } from "../../server/tools/mail/resolveAddresses.ts";
 import { TOOL as searchTool } from "../../server/tools/mail/search.ts";
 import { getMailIndex } from "./index/manager.ts";
 
@@ -38,6 +39,7 @@ export function buildMailPlugin(config: Config): DomainPlugin {
       getEmailLinksTool,
       getEmailAttachmentsTool,
       getEmailAttachmentTool,
+      resolveAddressesTool,
       searchTool,
     ],
     async getIndexStatus(): Promise<DomainIndexStatus> {

@@ -27,6 +27,8 @@ import { TOOL as getEmailLinksTool } from "../../src/server/tools/mail/getEmailL
 import { TOOL as getEmailsTool } from "../../src/server/tools/mail/getEmails.ts";
 import { TOOL as listAccountsTool } from "../../src/server/tools/mail/listAccounts.ts";
 import { TOOL as listMailboxesTool } from "../../src/server/tools/mail/listMailboxes.ts";
+import { TOOL as resolveAddressesTool } from "../../src/server/tools/mail/resolveAddresses.ts";
+import { listContacts } from "../../src/domains/contacts/addressBook.ts";
 import { detectMailDir } from "../../src/utils/paths.ts";
 
 const E2E = process.env.MAC_MCP_E2E === "1";
@@ -392,5 +394,31 @@ describe.skipIf(!E2E)("mail e2e: direct handler calls against live Mail data", (
       _resetMailIndexForTests();
       rmSync(tmp, { recursive: true, force: true });
     }
+  });
+
+  test("mail_resolve_addresses: real email resolves, fake email returns null", async () => {
+    const list = listContacts({ limit: 100 });
+    const withEmail = list.contacts.find((c) => c.primaryEmail);
+    if (!withEmail?.primaryEmail) return;
+    const real = withEmail.primaryEmail;
+    const fake = `definitely-not-real-${Date.now()}@example.invalid`;
+    const r = (await resolveAddressesTool.handler({ emails: [real, fake] })) as {
+      matches: { email: string; contact: { id: string } | null }[];
+    };
+    expect(r.matches.length).toBe(2);
+    const realMatch = r.matches.find((m) => m.email === real.toLowerCase());
+    const fakeMatch = r.matches.find((m) => m.email === fake.toLowerCase());
+    expect(realMatch?.contact?.id).toBe(withEmail.id);
+    expect(fakeMatch?.contact).toBeNull();
+  });
+
+  test("mail_resolve_addresses: rejects malformed addresses at the input boundary", async () => {
+    let threw = false;
+    try {
+      await resolveAddressesTool.handler({ emails: ["not-an-email"] });
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
   });
 });
