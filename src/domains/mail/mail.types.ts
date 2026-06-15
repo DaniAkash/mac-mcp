@@ -51,6 +51,43 @@ export interface SearchResult extends EmailSummary {
   bm25Score: number;
 }
 
+export type EmailLinkKind = "http" | "mailto" | "tel" | "other";
+
+export interface EmailLink {
+  url: string;
+  text?: string;
+  kind: EmailLinkKind;
+  inHeader?: boolean;
+}
+
+export interface EmailLinksResult {
+  source: "html" | "text" | "both";
+  links: EmailLink[];
+  totalReturned: number;
+  truncated: boolean;
+}
+
+export interface AttachmentSummary {
+  index: number;
+  filename: string;
+  contentType: string;
+  size: number;
+  contentDisposition: "attachment" | "inline";
+  contentId?: string;
+}
+
+export interface AttachmentsListResult {
+  attachments: AttachmentSummary[];
+  totalReturned: number;
+}
+
+export interface AttachmentBytesResult {
+  filename: string;
+  contentType: string;
+  size: number;
+  base64: string;
+}
+
 export interface EmlxParseResult {
   id: number;
   emlxPath: string;

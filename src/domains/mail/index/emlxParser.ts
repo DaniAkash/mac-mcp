@@ -1,11 +1,16 @@
 import { stat } from "node:fs/promises";
 import { basename, sep } from "node:path";
-import { simpleParser } from "mailparser";
+import { type ParsedMail, simpleParser } from "mailparser";
 import { stripHtml } from "../../../utils/htmlStripper.ts";
 import { decodeFlags, readFlagsFromPlist } from "../../../utils/plistFooter.ts";
 import type { EmlxParseResult } from "../mail.types.ts";
 
 const MAX_EMLX_SIZE = 25 * 1024 * 1024;
+
+export interface EmlxParseFullResult {
+  stripped: EmlxParseResult;
+  raw: ParsedMail;
+}
 
 export class EmlxParseError extends Error {
   constructor(
@@ -31,6 +36,19 @@ export async function parseEmlx(
   path: string,
   opts: ParseOpts = {},
 ): Promise<EmlxParseResult | null> {
+  const full = await parseEmlxFull(path, opts);
+  return full?.stripped ?? null;
+}
+
+/**
+ * Like parseEmlx but also returns the raw mailparser output so callers that
+ * need attachment buffers, HTML, or full header objects do not have to
+ * re-read and re-parse the file.
+ */
+export async function parseEmlxFull(
+  path: string,
+  opts: ParseOpts = {},
+): Promise<EmlxParseFullResult | null> {
   const cap = opts.maxSizeBytes ?? MAX_EMLX_SIZE;
   let size: number;
   try {
@@ -61,7 +79,7 @@ export async function parseEmlx(
   const mimeBytes = bytes.subarray(mimeStart, mimeEnd);
   const plistBytes = bytes.subarray(mimeEnd);
 
-  let parsed: Awaited<ReturnType<typeof simpleParser>>;
+  let parsed: ParsedMail;
   try {
     parsed = await simpleParser(Buffer.from(mimeBytes));
   } catch (e) {
@@ -74,7 +92,7 @@ export async function parseEmlx(
   const { account, mailbox } = inferAccountAndMailbox(path);
   const id = inferId(path);
 
-  return {
+  const stripped: EmlxParseResult = {
     id,
     emlxPath: path,
     account,
@@ -93,9 +111,10 @@ export async function parseEmlx(
     isFlagged: flags.flagged,
     isDeleted: flags.deleted,
   };
+  return { stripped, raw: parsed };
 }
 
-function extractBody(parsed: Awaited<ReturnType<typeof simpleParser>>): string {
+function extractBody(parsed: ParsedMail): string {
   if (typeof parsed.text === "string" && parsed.text.length > 0) {
     return collapseWhitespace(parsed.text);
   }
@@ -112,7 +131,7 @@ function collapseWhitespace(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
-function extractRecipients(parsed: Awaited<ReturnType<typeof simpleParser>>): {
+function extractRecipients(parsed: ParsedMail): {
   to: string[];
   cc: string[];
   bcc: string[];
@@ -141,7 +160,7 @@ function addressArray(value: unknown): string[] {
   return [];
 }
 
-function pickDateReceived(parsed: Awaited<ReturnType<typeof simpleParser>>): string {
+function pickDateReceived(parsed: ParsedMail): string {
   const received = parsed.headers.get("received");
   if (typeof received === "string") {
     const lastSemi = received.lastIndexOf(";");

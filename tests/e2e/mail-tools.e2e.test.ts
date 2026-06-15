@@ -21,9 +21,14 @@ import { _clearAccountMapForTests } from "../../src/domains/mail/index/accountMa
 import { openEnvelopeIndex } from "../../src/domains/mail/index/envelopeDirect.ts";
 import { _resetMailIndexForTests, getMailIndex } from "../../src/domains/mail/index/manager.ts";
 import { TOOL as getEmailTool } from "../../src/server/tools/mail/getEmail.ts";
+import { TOOL as getEmailAttachmentTool } from "../../src/server/tools/mail/getEmailAttachment.ts";
+import { TOOL as getEmailAttachmentsTool } from "../../src/server/tools/mail/getEmailAttachments.ts";
+import { TOOL as getEmailLinksTool } from "../../src/server/tools/mail/getEmailLinks.ts";
 import { TOOL as getEmailsTool } from "../../src/server/tools/mail/getEmails.ts";
 import { TOOL as listAccountsTool } from "../../src/server/tools/mail/listAccounts.ts";
 import { TOOL as listMailboxesTool } from "../../src/server/tools/mail/listMailboxes.ts";
+import { TOOL as resolveAddressesTool } from "../../src/server/tools/mail/resolveAddresses.ts";
+import { listContacts } from "../../src/domains/contacts/addressBook.ts";
 import { detectMailDir } from "../../src/utils/paths.ts";
 
 const E2E = process.env.MAC_MCP_E2E === "1";
@@ -259,5 +264,161 @@ describe.skipIf(!E2E)("mail e2e: direct handler calls against live Mail data", (
       _resetMailIndexForTests();
       rmSync(tmp, { recursive: true, force: true });
     }
+  });
+
+  test("mail_get_email_links: unknown messageId returns an error envelope", async () => {
+    const r = (await getEmailLinksTool.handler({ messageId: 999_999_999 })) as { error?: string };
+    expect(r.error).toBeDefined();
+  });
+
+  test("mail_get_email_links: returns a links array shape for a real indexed email", async () => {
+    const list = (await getEmailsTool.handler({ limit: 1 })) as EmailsFlat & {
+      emails: (EmailsFlat["emails"][number] & { mailbox?: string; account?: string })[];
+    };
+    const first = list.emails[0];
+    if (!first) return;
+    const { accounts } = (await listAccountsTool.handler({})) as AccountsResult;
+    const accountUuid = accounts.find((a) => a.name === first.account)?.id;
+    const mailbox = first.mailbox;
+    if (!accountUuid || !mailbox) return;
+    const mailDir = detectMailDir();
+    if (!mailDir) return;
+    const mailboxPath = mailbox
+      .split("/")
+      .map((s) => `${s}.mbox`)
+      .join("/");
+    const searchRoot = `${mailDir.path}/${accountUuid}/${mailboxPath}`;
+    const candidates = await Array.fromAsync(glob(`${searchRoot}/**/${first.id}.emlx`));
+    const emlxPath = candidates[0];
+    if (!emlxPath) return;
+    const tmp = mkdtempSync(join(tmpdir(), "mac-mcp-e2e-links-"));
+    try {
+      _resetMailIndexForTests();
+      const mgr = getMailIndex({
+        indexDir: tmp,
+        maxEmailsPerMailbox: 0,
+        excludeMailboxes: [],
+        syncIntervalSeconds: 86400,
+      });
+      mgr.getDb().run(
+        `INSERT INTO emails (message_id, account, mailbox, subject, sender, content, date_received, date_sent, emlx_path, category, is_unread, is_flagged, attachment_count)
+         VALUES (?, ?, ?, '', '', '', '', '', ?, NULL, 1, 0, 0)`,
+        [first.id, accountUuid, mailbox, emlxPath],
+      );
+      const r = (await getEmailLinksTool.handler({
+        messageId: first.id,
+        account: first.account,
+        mailbox,
+        limit: 25,
+      })) as {
+        source?: string;
+        links?: { url: string; kind: string }[];
+        truncated?: boolean;
+        error?: string;
+      };
+      expect(r.error).toBeUndefined();
+      expect(r.source).toBeDefined();
+      expect(["html", "text", "both"]).toContain(r.source as string);
+      expect(Array.isArray(r.links)).toBe(true);
+      for (const l of r.links ?? []) {
+        expect(typeof l.url).toBe("string");
+        expect(["http", "mailto", "tel", "other"]).toContain(l.kind);
+      }
+    } finally {
+      _resetMailIndexForTests();
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("mail_get_email_attachments: unknown messageId returns an error envelope", async () => {
+    const r = (await getEmailAttachmentsTool.handler({ messageId: 999_999_998 })) as {
+      error?: string;
+    };
+    expect(r.error).toBeDefined();
+  });
+
+  test("mail_get_email_attachment: index_out_of_range surfaces a clear envelope", async () => {
+    interface EmailRow {
+      id: number;
+      account?: string;
+      mailbox?: string;
+      hasAttachments?: boolean;
+    }
+    const list = (await getEmailsTool.handler({ limit: 50 })) as { emails: EmailRow[] };
+    const candidate: EmailRow | undefined =
+      list.emails.find((e) => e.hasAttachments) ?? list.emails[0];
+    if (!candidate) return;
+    const { accounts } = (await listAccountsTool.handler({})) as AccountsResult;
+    const accountUuid = accounts.find((a) => a.name === candidate.account)?.id;
+    const mailbox = candidate.mailbox;
+    if (!accountUuid || !mailbox) return;
+    const mailDir = detectMailDir();
+    if (!mailDir) return;
+    const mailboxPath = mailbox
+      .split("/")
+      .map((s: string) => `${s}.mbox`)
+      .join("/");
+    const searchRoot = `${mailDir.path}/${accountUuid}/${mailboxPath}`;
+    const candidates = await Array.fromAsync(glob(`${searchRoot}/**/${candidate.id}.emlx`));
+    const emlxPath = candidates[0];
+    if (!emlxPath) return;
+    const tmp = mkdtempSync(join(tmpdir(), "mac-mcp-e2e-att-"));
+    try {
+      _resetMailIndexForTests();
+      const mgr = getMailIndex({
+        indexDir: tmp,
+        maxEmailsPerMailbox: 0,
+        excludeMailboxes: [],
+        syncIntervalSeconds: 86400,
+      });
+      mgr.getDb().run(
+        `INSERT INTO emails (message_id, account, mailbox, subject, sender, content, date_received, date_sent, emlx_path, category, is_unread, is_flagged, attachment_count)
+         VALUES (?, ?, ?, '', '', '', '', '', ?, NULL, 1, 0, 0)`,
+        [candidate.id, accountUuid, mailbox, emlxPath],
+      );
+      const list2 = (await getEmailAttachmentsTool.handler({
+        messageId: candidate.id,
+        account: candidate.account,
+        mailbox,
+      })) as { attachments?: { index: number; size: number }[]; error?: string };
+      expect(list2.error).toBeUndefined();
+      expect(Array.isArray(list2.attachments)).toBe(true);
+      const bogus = (await getEmailAttachmentTool.handler({
+        messageId: candidate.id,
+        account: candidate.account,
+        mailbox,
+        attachmentIndex: 9999,
+      })) as { error?: string };
+      expect(bogus.error).toMatch(/out of range/);
+    } finally {
+      _resetMailIndexForTests();
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("mail_resolve_addresses: real email resolves, fake email returns null", async () => {
+    const list = listContacts({ limit: 100 });
+    const withEmail = list.contacts.find((c) => c.primaryEmail);
+    if (!withEmail?.primaryEmail) return;
+    const real = withEmail.primaryEmail;
+    const fake = `definitely-not-real-${Date.now()}@example.invalid`;
+    const r = (await resolveAddressesTool.handler({ emails: [real, fake] })) as {
+      matches: { email: string; contact: { id: string } | null }[];
+    };
+    expect(r.matches.length).toBe(2);
+    const realMatch = r.matches.find((m) => m.email === real.toLowerCase());
+    const fakeMatch = r.matches.find((m) => m.email === fake.toLowerCase());
+    expect(realMatch?.contact?.id).toBe(withEmail.id);
+    expect(fakeMatch?.contact).toBeNull();
+  });
+
+  test("mail_resolve_addresses: rejects malformed addresses at the input boundary", async () => {
+    let threw = false;
+    try {
+      await resolveAddressesTool.handler({ emails: ["not-an-email"] });
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
   });
 });

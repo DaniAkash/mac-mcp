@@ -36,17 +36,21 @@ mac-mcp index            # bulk-build domain indexes
 mac-mcp rebuild --domain <name>   # rebuild a single domain's index
 ```
 
-## Mail tools (v0.1)
+## Mail tools
 
-Five read-only MCP tools, plus the `index://status` resource.
+Nine read-only MCP tools, plus the `index://status` resource.
 
-| Tool                  | What it does                                                                                                                                                                                                                                                        |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mail_list_accounts`  | List all Mail accounts with display names + UUIDs.                                                                                                                                                                                                                  |
-| `mail_list_mailboxes` | List mailboxes per account with current unread counts.                                                                                                                                                                                                              |
-| `mail_get_emails`     | Recency-sorted email list. Optional `account`, `mailbox`, `category` (primary/transactions/updates/promotions), `filter` (all/unread/flagged/today/last_7_days), `before`/`after` (YYYY-MM-DD), and **`group_by`** to bucket by unread state, category, or account. |
-| `mail_get_email`      | Fetch a full email by Mail.app integer id with body, recipients, headers.                                                                                                                                                                                           |
-| `mail_search`         | FTS5 BM25 search across subject/sender/body with scope, account, mailbox, category, and date filters.                                                                                                                                                               |
+| Tool                         | What it does                                                                                                                                                                                                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mail_list_accounts`         | List all Mail accounts with display names + UUIDs.                                                                                                                                                                                                                  |
+| `mail_list_mailboxes`        | List mailboxes per account with current unread counts.                                                                                                                                                                                                              |
+| `mail_get_emails`            | Recency-sorted email list. Optional `account`, `mailbox`, `category` (primary/transactions/updates/promotions), `filter` (all/unread/flagged/today/last_7_days), `before`/`after` (YYYY-MM-DD), and **`group_by`** to bucket by unread state, category, or account. |
+| `mail_get_email`             | Fetch a full email by Mail.app integer id with body, recipients, headers.                                                                                                                                                                                           |
+| `mail_get_email_links`       | Extract every URL from an email body and the `List-Unsubscribe` / `List-Help` / `List-Archive` headers. Returns `(url, kind, text?, inHeader?)` records. Optional `kinds` filter, dedupe, and limit.                                                                |
+| `mail_get_email_attachments` | List attachment metadata for an email: index, filename, content type, size, disposition, optional content-id.                                                                                                                                                       |
+| `mail_get_email_attachment`  | Fetch one attachment's bytes as base64 by 0-based index. Default cap 5 MiB, hard cap 10 MiB; larger attachments return an error envelope describing the actual size.                                                                                                |
+| `mail_resolve_addresses`     | Bulk-resolve 1 to 100 bare email addresses against the local AddressBook. Returns a contact summary per email on exact match, null otherwise. Substring matches are filtered out.                                                                                   |
+| `mail_search`                | FTS5 BM25 search across subject/sender/body with scope, account, mailbox, category, and date filters.                                                                                                                                                               |
 
 ### Apple Mail category awareness
 
