@@ -101,6 +101,75 @@ describe("parseEmlx", () => {
     expect(out?.body).not.toContain("alert");
   });
 
+  test("HTML-only newsletter body extracts the full paragraph content", async () => {
+    // Regression for issue #12: mailparser's synthesised parsed.text is
+    // near-empty for many real newsletters. The Content-Type=text/html branch
+    // must bypass the synthesis and strip the raw HTML directly.
+    const mime =
+      "From: news@example.com\r\n" +
+      "Subject: Daily digest\r\n" +
+      "Content-Type: text/html; charset=utf-8\r\n" +
+      "\r\n" +
+      "<html><body>" +
+      "<h1>TODAY_HEADLINE</h1>" +
+      "<p>FIRST_PARAGRAPH about markets.</p>" +
+      "<p>SECOND_PARAGRAPH about tech.</p>" +
+      "</body></html>";
+    const path = buildEmlx({ mime, flags: 0 });
+    const out = await parseEmlx(path);
+    expect(out?.body).toContain("TODAY_HEADLINE");
+    expect(out?.body).toContain("FIRST_PARAGRAPH");
+    expect(out?.body).toContain("SECOND_PARAGRAPH");
+  });
+
+  test("HTML-only body never leaks raw HTML markup", async () => {
+    // Regression for issue #12 second symptom: for some HTML emails
+    // mailparser dumps raw markup into parsed.text. The text/html branch
+    // must strip so `<` never surfaces.
+    const mime =
+      "From: n@e.com\r\n" +
+      "Subject: Big blob\r\n" +
+      "Content-Type: text/html; charset=utf-8\r\n" +
+      "\r\n" +
+      `<html><body>${"<div><p>Chunk of content</p></div>".repeat(50)}</body></html>`;
+    const path = buildEmlx({ mime, flags: 0 });
+    const out = await parseEmlx(path);
+    expect(out?.body).not.toContain("<html");
+    expect(out?.body).not.toContain("<body");
+    expect(out?.body).not.toContain("<div");
+    expect(out?.body).not.toContain("<p>");
+    expect(out?.body).toContain("Chunk of content");
+  });
+
+  test("HTML-only with quoted-printable transfer encoding decodes correctly", async () => {
+    const mime =
+      "From: n@e.com\r\n" +
+      "Subject: QP encoded\r\n" +
+      "Content-Type: text/html; charset=utf-8\r\n" +
+      "Content-Transfer-Encoding: quoted-printable\r\n" +
+      "\r\n" +
+      "<html><body><p>Hello=20world.</p></body></html>";
+    const path = buildEmlx({ mime, flags: 0 });
+    const out = await parseEmlx(path);
+    expect(out?.body).toContain("Hello world.");
+  });
+
+  test("image-only HTML falls through to mailparser text when strip is empty", async () => {
+    // Every visible node is an <img> with no alt text. cheerio's .text()
+    // yields "", so the html-only branch's stripped.length > 0 guard
+    // fires and we fall through to parsed.text (which mailparser fills
+    // with the cid references). Not ideal but better than empty.
+    const mime =
+      "From: promo@e.com\r\n" +
+      "Subject: img only\r\n" +
+      "Content-Type: text/html; charset=utf-8\r\n" +
+      "\r\n" +
+      '<html><body><img src="cid:hero" alt=""><img src="cid:cta" alt=""></body></html>';
+    const path = buildEmlx({ mime, flags: 0 });
+    const out = await parseEmlx(path);
+    expect(out?.body.length).toBeGreaterThan(0);
+  });
+
   test("flags bitmask decodes correctly", async () => {
     const baseMime = "From: s@e.com\r\nSubject: Flags\r\nContent-Type: text/plain\r\n\r\nbody";
     const unreadPath = buildEmlx({ mime: baseMime, flags: 0, filename: "1.emlx" });
