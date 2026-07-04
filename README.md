@@ -45,7 +45,7 @@ Nine read-only MCP tools, plus the `index://status` resource.
 | `mail_list_accounts`         | List all Mail accounts with display names + UUIDs.                                                                                                                                                                                                                  |
 | `mail_list_mailboxes`        | List mailboxes per account with current unread counts.                                                                                                                                                                                                              |
 | `mail_get_emails`            | Recency-sorted email list. Optional `account`, `mailbox`, `category` (primary/transactions/updates/promotions), `filter` (all/unread/flagged/today/last_7_days), `before`/`after` (YYYY-MM-DD), and **`group_by`** to bucket by unread state, category, or account. |
-| `mail_get_email`             | Fetch a full email by Mail.app integer id with body, recipients, headers.                                                                                                                                                                                           |
+| `mail_get_email`             | Fetch a full email by Mail.app integer id with body, recipients, headers. Pass `includeHtml: true` to also return the raw text/html MIME part on the response (capped at 1 MiB).                                                                                    |
 | `mail_get_email_links`       | Extract every URL from an email body and the `List-Unsubscribe` / `List-Help` / `List-Archive` headers. Returns `(url, kind, text?, inHeader?)` records. Optional `kinds` filter, dedupe, and limit.                                                                |
 | `mail_get_email_attachments` | List attachment metadata for an email: index, filename, content type, size, disposition, optional content-id.                                                                                                                                                       |
 | `mail_get_email_attachment`  | Fetch one attachment's bytes as base64 by 0-based index. Default cap 5 MiB, hard cap 10 MiB; larger attachments return an error envelope describing the actual size.                                                                                                |
@@ -64,6 +64,8 @@ The Mail domain maintains a SQLite + FTS5 index at `~/.mac-mcp/mail.db`:
 - Disk-first state-reconciliation sync (NEW / DELETED / MOVED diffs in pure SQL).
 - Background sync every 5 minutes by default (configurable).
 - Dead-letter queue surfaces parse failures via `index://status`.
+
+Existing installs that indexed messages before this update should run `mac-mcp rebuild --domain mail` once so the FTS5 `content` column picks up the fixed HTML-only body extraction. Freshly synced messages pick up the fix automatically.
 
 ## Spotlight tool
 

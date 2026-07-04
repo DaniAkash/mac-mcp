@@ -154,6 +154,27 @@ describe("parseEmlx", () => {
     expect(out?.body).toContain("Hello world.");
   });
 
+  test("html field is populated when a text/html part is present", async () => {
+    const mime =
+      "From: n@e.com\r\n" +
+      "Subject: HTML present\r\n" +
+      "Content-Type: text/html; charset=utf-8\r\n" +
+      "\r\n" +
+      "<html><body><p>Body</p></body></html>";
+    const path = buildEmlx({ mime, flags: 0 });
+    const out = await parseEmlx(path);
+    expect(out?.html).toContain("<p>Body</p>");
+  });
+
+  test("html field is undefined for text/plain-only messages", async () => {
+    const path = buildEmlx({
+      mime: "From: n@e.com\r\nSubject: Plain\r\nContent-Type: text/plain\r\n\r\nHello.",
+      flags: 0,
+    });
+    const out = await parseEmlx(path);
+    expect(out?.html).toBeUndefined();
+  });
+
   test("image-only HTML falls through to mailparser text when strip is empty", async () => {
     // Every visible node is an <img> with no alt text. cheerio's .text()
     // yields "", so the html-only branch's stripped.length > 0 guard

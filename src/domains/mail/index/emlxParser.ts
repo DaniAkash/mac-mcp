@@ -6,6 +6,7 @@ import { decodeFlags, readFlagsFromPlist } from "../../../utils/plistFooter.ts";
 import type { EmlxParseResult } from "../mail.types.ts";
 
 const MAX_EMLX_SIZE = 25 * 1024 * 1024;
+const HTML_FIELD_CAP = 1024 * 1024;
 
 export interface EmlxParseFullResult {
   stripped: EmlxParseResult;
@@ -92,6 +93,11 @@ export async function parseEmlxFull(
   const { account, mailbox } = inferAccountAndMailbox(path);
   const id = inferId(path);
 
+  const html =
+    typeof parsed.html === "string" && parsed.html.length > 0
+      ? parsed.html.slice(0, HTML_FIELD_CAP)
+      : undefined;
+
   const stripped: EmlxParseResult = {
     id,
     emlxPath: path,
@@ -105,6 +111,7 @@ export async function parseEmlxFull(
     dateSent: parsed.date?.toISOString() ?? "",
     dateReceived: pickDateReceived(parsed),
     body,
+    ...(html !== undefined ? { html } : {}),
     rawHeaders: parsed.headerLines.map((h) => h.line).join("\n"),
     attachmentCount: parsed.attachments?.length ?? 0,
     isUnread: !flags.read,
