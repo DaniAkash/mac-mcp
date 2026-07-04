@@ -175,6 +175,32 @@ describe("parseEmlx", () => {
     expect(out?.html).toBeUndefined();
   });
 
+  test("multipart with a whitespace-only text/plain part falls through to HTML", async () => {
+    // Real-world regression: mailbrew and similar newsletter generators ship
+    // multipart/alternative with a text/plain part that is just "\n" while
+    // the actual content lives in the HTML part. Trusting parsed.text
+    // verbatim would return an empty body for these.
+    const boundary = "WHITESPACE_ONLY_PLAIN";
+    const mime =
+      `From: news@e.com\r\n` +
+      `Subject: multipart with empty plain\r\n` +
+      `Content-Type: multipart/alternative; boundary="${boundary}"\r\n` +
+      `\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: text/plain; charset=utf-8\r\n` +
+      `\r\n` +
+      `\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: text/html; charset=utf-8\r\n` +
+      `\r\n` +
+      `<p>RICH_HTML_CONTENT</p>\r\n` +
+      `--${boundary}--\r\n`;
+    const path = buildEmlx({ mime, flags: 0 });
+    const out = await parseEmlx(path);
+    expect(out?.body).toContain("RICH_HTML_CONTENT");
+    expect(out?.body).not.toContain("<p>");
+  });
+
   test("image-only HTML falls through to mailparser text when strip is empty", async () => {
     // Every visible node is an <img> with no alt text. cheerio's .text()
     // yields "", so the html-only branch's stripped.length > 0 guard

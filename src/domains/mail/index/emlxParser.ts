@@ -147,8 +147,14 @@ function extractBody(parsed: ParsedMail): string {
     if (stripped.length > 0) return stripped;
   }
 
+  // Trust parsed.text only when it collapses to actual content. Some real
+  // multipart/alternative senders (mailbrew and similar newsletter
+  // generators) ship a text/plain part that is just "\n" alongside a rich
+  // HTML part; taking that verbatim would leak issue #12 back through the
+  // multipart branch even though the top-level Content-Type is not text/html.
   if (typeof parsed.text === "string" && parsed.text.length > 0) {
-    return collapseWhitespace(parsed.text);
+    const collapsed = collapseWhitespace(parsed.text);
+    if (collapsed.length > 0) return collapsed;
   }
   if (htmlStr !== null) {
     return stripHtml(htmlStr);
