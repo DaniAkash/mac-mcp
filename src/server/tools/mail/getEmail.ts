@@ -11,6 +11,12 @@ const inputShape = {
   account: z.string().optional(),
   mailbox: z.string().optional(),
   includeRawHeaders: z.boolean().optional(),
+  includeHtml: z
+    .boolean()
+    .optional()
+    .describe(
+      "When true, include the raw text/html MIME part on the response as `html` (capped at 1 MiB). Off by default so payloads stay small.",
+    ),
 };
 
 export const TOOL: ToolModule = {
@@ -53,6 +59,7 @@ export const TOOL: ToolModule = {
           attachmentCount: parsed.attachmentCount,
         };
         if (args.includeRawHeaders) out.rawHeaders = parsed.rawHeaders;
+        if (args.includeHtml && parsed.html) out.html = parsed.html;
         return out;
       }
       case "envelope_only": {

@@ -6,6 +6,7 @@ import { decodeFlags, readFlagsFromPlist } from "../../../utils/plistFooter.ts";
 import type { EmlxParseResult } from "../mail.types.ts";
 
 const MAX_EMLX_SIZE = 25 * 1024 * 1024;
+const HTML_FIELD_CAP = 1024 * 1024;
 
 export interface EmlxParseFullResult {
   stripped: EmlxParseResult;
@@ -92,6 +93,11 @@ export async function parseEmlxFull(
   const { account, mailbox } = inferAccountAndMailbox(path);
   const id = inferId(path);
 
+  const html =
+    typeof parsed.html === "string" && parsed.html.length > 0
+      ? parsed.html.slice(0, HTML_FIELD_CAP)
+      : undefined;
+
   const stripped: EmlxParseResult = {
     id,
     emlxPath: path,
@@ -105,6 +111,7 @@ export async function parseEmlxFull(
     dateSent: parsed.date?.toISOString() ?? "",
     dateReceived: pickDateReceived(parsed),
     body,
+    ...(html !== undefined ? { html } : {}),
     rawHeaders: parsed.headerLines.map((h) => h.line).join("\n"),
     attachmentCount: parsed.attachments?.length ?? 0,
     isUnread: !flags.read,
@@ -114,12 +121,43 @@ export async function parseEmlxFull(
   return { stripped, raw: parsed };
 }
 
-function extractBody(parsed: ParsedMail): string {
-  if (typeof parsed.text === "string" && parsed.text.length > 0) {
-    return collapseWhitespace(parsed.text);
+function getTopLevelContentType(parsed: ParsedMail): string {
+  const ct = parsed.headers.get("content-type");
+  if (typeof ct === "string") {
+    const semi = ct.indexOf(";");
+    return (semi === -1 ? ct : ct.slice(0, semi)).trim().toLowerCase();
   }
-  if (typeof parsed.html === "string" && parsed.html.length > 0) {
-    return stripHtml(parsed.html);
+  if (ct && typeof ct === "object" && "value" in ct) {
+    const value = (ct as { value: unknown }).value;
+    if (typeof value === "string") return value.toLowerCase();
+  }
+  return "";
+}
+
+function extractBody(parsed: ParsedMail): string {
+  const contentType = getTopLevelContentType(parsed);
+  const htmlStr = typeof parsed.html === "string" && parsed.html.length > 0 ? parsed.html : null;
+
+  // Top-level text/html: skip mailparser's synthesised parsed.text. On real
+  // newsletters that synthesis returns empty or leaks raw markup (issue #12).
+  // Multipart is unaffected because parsed.text there is the real text/plain
+  // child part, not a synthesis.
+  if (contentType === "text/html" && htmlStr !== null) {
+    const stripped = stripHtml(htmlStr);
+    if (stripped.length > 0) return stripped;
+  }
+
+  // Trust parsed.text only when it collapses to actual content. Some real
+  // multipart/alternative senders (mailbrew and similar newsletter
+  // generators) ship a text/plain part that is just "\n" alongside a rich
+  // HTML part; taking that verbatim would leak issue #12 back through the
+  // multipart branch even though the top-level Content-Type is not text/html.
+  if (typeof parsed.text === "string" && parsed.text.length > 0) {
+    const collapsed = collapseWhitespace(parsed.text);
+    if (collapsed.length > 0) return collapsed;
+  }
+  if (htmlStr !== null) {
+    return stripHtml(htmlStr);
   }
   if (parsed.html === false && typeof parsed.textAsHtml === "string") {
     return stripHtml(parsed.textAsHtml);

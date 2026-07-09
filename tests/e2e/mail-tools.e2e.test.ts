@@ -20,6 +20,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { _clearAccountMapForTests } from "../../src/domains/mail/index/accountMap.ts";
 import { openEnvelopeIndex } from "../../src/domains/mail/index/envelopeDirect.ts";
 import { _resetMailIndexForTests, getMailIndex } from "../../src/domains/mail/index/manager.ts";
+import { parseEmlxFull } from "../../src/domains/mail/index/emlxParser.ts";
 import { TOOL as getEmailTool } from "../../src/server/tools/mail/getEmail.ts";
 import { TOOL as getEmailAttachmentTool } from "../../src/server/tools/mail/getEmailAttachment.ts";
 import { TOOL as getEmailAttachmentsTool } from "../../src/server/tools/mail/getEmailAttachments.ts";
@@ -220,7 +221,9 @@ describe.skipIf(!E2E)("mail e2e: direct handler calls against live Mail data", (
       .split("/")
       .map((s) => `${s}.mbox`)
       .join("/");
-    const searchRoot = `${mailDir.path}/${accountUuid}/${mailboxPath}`;
+    const searchRoot = `${mailDir.path}/${accountUuid}/${mailboxPath}`
+      .replaceAll("[", "\\[")
+      .replaceAll("]", "\\]");
     const candidates = await Array.fromAsync(glob(`${searchRoot}/**/${first.id}.emlx`));
     const emlxPath = candidates[0];
     if (!emlxPath) {
@@ -287,7 +290,9 @@ describe.skipIf(!E2E)("mail e2e: direct handler calls against live Mail data", (
       .split("/")
       .map((s) => `${s}.mbox`)
       .join("/");
-    const searchRoot = `${mailDir.path}/${accountUuid}/${mailboxPath}`;
+    const searchRoot = `${mailDir.path}/${accountUuid}/${mailboxPath}`
+      .replaceAll("[", "\\[")
+      .replaceAll("]", "\\]");
     const candidates = await Array.fromAsync(glob(`${searchRoot}/**/${first.id}.emlx`));
     const emlxPath = candidates[0];
     if (!emlxPath) return;
@@ -358,7 +363,9 @@ describe.skipIf(!E2E)("mail e2e: direct handler calls against live Mail data", (
       .split("/")
       .map((s: string) => `${s}.mbox`)
       .join("/");
-    const searchRoot = `${mailDir.path}/${accountUuid}/${mailboxPath}`;
+    const searchRoot = `${mailDir.path}/${accountUuid}/${mailboxPath}`
+      .replaceAll("[", "\\[")
+      .replaceAll("]", "\\]");
     const candidates = await Array.fromAsync(glob(`${searchRoot}/**/${candidate.id}.emlx`));
     const emlxPath = candidates[0];
     if (!emlxPath) return;
@@ -420,5 +427,108 @@ describe.skipIf(!E2E)("mail e2e: direct handler calls against live Mail data", (
       threw = true;
     }
     expect(threw).toBe(true);
+  });
+
+  test("mail_get_email: HTML-only real email returns non-empty stripped body (issue #12)", async () => {
+    // Scan recent emails, find one whose .emlx has a text/html top-level part
+    // (the class of message that used to return body=""), seed the local
+    // index for it, and verify the tool now returns a non-empty stripped body
+    // that contains no raw markup. Fails loud if no HTML-only email is found
+    // in the scan window rather than silently passing.
+    const mailDir = detectMailDir();
+    expect(mailDir).not.toBeNull();
+    if (!mailDir) return;
+    const { accounts } = (await listAccountsTool.handler({})) as AccountsResult;
+    const accountByName = new Map(accounts.map((a) => [a.name, a.id]));
+
+    const SCAN = 100;
+    interface EmailRow {
+      id: number;
+      account?: string;
+      mailbox?: string;
+    }
+    const list = (await getEmailsTool.handler({ limit: SCAN })) as { emails: EmailRow[] };
+
+    let picked: {
+      row: EmailRow;
+      emlxPath: string;
+      accountUuid: string;
+      mailbox: string;
+    } | null = null;
+
+    for (const row of list.emails) {
+      if (!row.account || !row.mailbox) continue;
+      const accountUuid = accountByName.get(row.account);
+      if (!accountUuid) continue;
+      const mailboxPath = row.mailbox
+        .split("/")
+        .map((s: string) => `${s}.mbox`)
+        .join("/");
+      // Escape brackets so glob does not treat `[Gmail]` as a character class.
+      const searchRoot = `${mailDir.path}/${accountUuid}/${mailboxPath}`
+        .replaceAll("[", "\\[")
+        .replaceAll("]", "\\]");
+      const candidates = await Array.fromAsync(glob(`${searchRoot}/**/${row.id}.emlx`));
+      const emlxPath = candidates[0];
+      if (!emlxPath) continue;
+      let parsed;
+      try {
+        parsed = await parseEmlxFull(emlxPath);
+      } catch {
+        continue;
+      }
+      if (!parsed) continue;
+      const ct = parsed.raw.headers.get("content-type");
+      const value =
+        typeof ct === "string"
+          ? ct.split(";")[0]?.trim().toLowerCase()
+          : ct && typeof ct === "object" && "value" in ct
+            ? String((ct as { value: unknown }).value).toLowerCase()
+            : "";
+      if (value === "text/html") {
+        picked = { row, emlxPath, accountUuid, mailbox: row.mailbox };
+        break;
+      }
+    }
+
+    expect(picked).not.toBeNull();
+    if (!picked) return;
+
+    const tmp = mkdtempSync(join(tmpdir(), "mac-mcp-e2e-html-body-"));
+    try {
+      _resetMailIndexForTests();
+      const mgr = getMailIndex({
+        indexDir: tmp,
+        maxEmailsPerMailbox: 0,
+        excludeMailboxes: [],
+        syncIntervalSeconds: 86400,
+      });
+      mgr.getDb().run(
+        `INSERT INTO emails (message_id, account, mailbox, subject, sender, content, date_received, date_sent, emlx_path, category, is_unread, is_flagged, attachment_count)
+         VALUES (?, ?, ?, '', '', '', '', '', ?, NULL, 1, 0, 0)`,
+        [picked.row.id, picked.accountUuid, picked.mailbox, picked.emlxPath],
+      );
+
+      const result = (await getEmailTool.handler({
+        messageId: picked.row.id,
+        account: picked.row.account,
+        mailbox: picked.mailbox,
+        includeHtml: true,
+      })) as { body: string; html?: string };
+
+      expect(result.body.length).toBeGreaterThan(0);
+      // The fix's contract: body from an HTML-only email must never contain
+      // raw markup. Guards against regression to Bug B (raw HTML leaking through).
+      expect(result.body).not.toContain("<html");
+      expect(result.body).not.toContain("<body");
+      expect(result.body).not.toContain("<div");
+      expect(result.body).not.toContain("<p>");
+      // includeHtml opt-in delivers the raw HTML alongside the stripped body.
+      expect(typeof result.html).toBe("string");
+      expect((result.html ?? "").length).toBeGreaterThan(0);
+    } finally {
+      _resetMailIndexForTests();
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

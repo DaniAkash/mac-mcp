@@ -42,6 +42,8 @@ export interface EmailFull {
   isFlagged: boolean;
   category: MailCategory | null;
   body: string;
+  /** Raw text/html MIME part when present. Off by default; opt in via includeHtml. */
+  html?: string;
   rawHeaders?: string;
   attachmentCount: number;
 }
@@ -101,6 +103,8 @@ export interface EmlxParseResult {
   dateSent: string;
   dateReceived: string;
   body: string;
+  /** Raw text/html MIME part when present. Capped so callers cannot balloon the payload. */
+  html?: string;
   rawHeaders: string;
   attachmentCount: number;
   isUnread: boolean;
